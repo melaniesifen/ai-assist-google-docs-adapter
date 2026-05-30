@@ -1,0 +1,13 @@
+{
+  "name": "ai-assist-google-docs-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-light Google Docs connector boundary for AI Assist.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
