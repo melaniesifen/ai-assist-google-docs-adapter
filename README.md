@@ -40,10 +40,20 @@ HTTP or queue adapters should wrap this domain layer later. Those adapters shoul
 - Keep document text, OAuth tokens, and authorization headers out of logs.
 - Add real Google Docs and Drive API implementations behind the injected `googleClient` interface.
 
-## Development
+## Testing And Coverage
 
-Run tests without installing dependencies:
+Run the unit tests with either command:
 
 ```sh
 node --test
+npm test
 ```
+
+View the built-in coverage report in the terminal:
+
+```sh
+node --experimental-test-coverage --test
+npm run coverage
+```
+
+The coverage command uses Node's built-in test runner and prints a text report. If later tooling writes HTML, LCOV, TAP, JUnit, or build output, those generated paths are ignored by `.gitignore`.

@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Dependency-light Google Docs connector boundary for AI Assist.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "coverage": "node --experimental-test-coverage --test"
   },
   "engines": {
     "node": ">=20"
