@@ -1,6 +1,6 @@
 # AI Assist Google Docs Adapter
 
-Dependency-light Node.js ESM bootstrap for the Google Docs connector boundary.
+Dependency-free Python package for the Google Docs connector boundary.
 
 ## MVP Boundary
 
@@ -16,7 +16,7 @@ This package owns Google Docs connector domain behavior:
 - Apply only MVP-safe `REPLACE_TEXT` and `INSERT_TEXT` mutations.
 - Return typed normalized errors for validation, stale resources, conflicts, permission failures, rate limits, and provider failures.
 
-This package intentionally has no Google SDK dependency. Production HTTP/API adapters should inject a Google client implementation and a token provider backed by the auth service token boundary.
+This package intentionally has no Google SDK dependency and no third-party Python dependency. Production HTTP/API adapters should inject a Google client implementation and a token provider backed by the auth service token boundary.
 
 ## Conflict Behavior
 
@@ -60,20 +60,14 @@ HTTP or queue adapters should wrap this domain layer later. Those adapters shoul
 
 Implementation tasks are tracked in [TASKS.md](TASKS.md). Update the checkboxes there in the same change that implements or verifies a task.
 
-## Testing And Coverage
+## Testing
 
-Run the unit tests with either command:
-
-```sh
-node --test
-npm test
-```
-
-View the built-in coverage report in the terminal:
+Run the unit tests with the standard library test runner:
 
 ```sh
-node --experimental-test-coverage --test
-npm run coverage
+python3 -m unittest discover -s tests
 ```
 
-The coverage command uses Node's built-in test runner and prints a text report. If later tooling writes HTML, LCOV, TAP, JUnit, or build output, those generated paths are ignored by `.gitignore`.
+No virtual environment or package install is required for the current local test suite. If later work adds third-party libraries, add repo-local dependency manifests and document the install command in this section.
+
+If later tooling writes coverage, cache, dependency, virtualenv, or build output, those generated paths are ignored by `.gitignore`.

@@ -16,8 +16,8 @@
 
 ## Commands
 
-- Run tests with `node --test`.
-- `npm` may not be available in this environment; prefer the direct Node command.
+- Run tests with `python3 -m unittest discover -s tests`.
+- The current package uses only the Python standard library. Do not add third-party dependencies without repo-local manifests and documented install/test commands.
 
 ## Review Notes
 

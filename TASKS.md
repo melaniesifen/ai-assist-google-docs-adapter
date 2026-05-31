@@ -4,6 +4,8 @@ Update this file as implementation progresses. Check off completed tasks in the 
 
 Canonical cross-repo tasks live in `../ai-assist-architecture/implementation-task-breakdown.md`. This repo owns the Google Docs adapter portions of `DOCS-*`, `CTX-005`, `ACTION-*`, `AUTH-003`, `OPS-003`, and `REPO-001` items, grounded by `../ai-assist-architecture/lld-context-connectors.md` and `../ai-assist-architecture/lld-actions-writeback.md`.
 
+Migration gate: The approved direction is to migrate this repo from the temporary JavaScript ESM bootstrap to Python. Do not continue broad new feature work until that migration is completed or explicitly deferred.
+
 ## Completed Bootstrap
 
 - [x] REPO-001 bootstrap: create dependency-light Node.js ESM package with direct `node:test` coverage commands.
@@ -21,6 +23,7 @@ Canonical cross-repo tasks live in `../ai-assist-architecture/implementation-tas
 ## Pending Architecture Tasks
 
 - [ ] REPO-001: decide final language/runtime, framework, package manager, package layout, migration cost, deployment target, and test strategy for this repo.
+- [x] REPO-002: migrate the Google Docs adapter bootstrap to a Python package layout with equivalent behavior and tests before broad new feature work continues.
 - [ ] AUTH-003: integrate token access with the auth service boundary, including revoked/expired Google token reconnect-required errors.
 - [ ] AUTH-003: define exact least-privilege Google OAuth scopes for resource listing, context reads, and safe replace/insert.
 - [ ] CTX-005: align connector interface inputs/outputs with shared contracts for list resources, read context, verify target, and apply safe mutation.

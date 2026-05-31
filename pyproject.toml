@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-assist-google-docs-adapter"
+version = "0.1.0"
+description = "Dependency-free Google Docs connector boundary for AI Assist."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["ai_assist_google_docs_adapter*"]
