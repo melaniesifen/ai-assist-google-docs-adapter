@@ -29,6 +29,22 @@ The adapter validates before mutation. It does not call `applyTextMutation` when
 
 Those failures return typed `GoogleDocsAdapterError` values such as `RESOURCE_STALE` or `TARGET_CONFLICT` so orchestration can mark a proposed action as `CONFLICTED` without overwriting document content.
 
+## Timeout And Retry Policy
+
+Adapter calls use a bounded operation timeout, defaulting to 10 seconds.
+
+- Resource listing, context reads, and target verification retry retryable provider failures once.
+- Mutation writes are not retried by this adapter. Orchestration must reconcile idempotency and action state before any repeat write attempt.
+- Timeouts return `PROVIDER_TIMEOUT`; mutation timeouts are not marked retryable because the provider write result is uncertain.
+- Revoked or expired token-provider failures return `TOKEN_RECONNECT_REQUIRED`.
+- Unsupported mutation types return `UNSUPPORTED_MUTATION` before provider mutation.
+
+## Metadata-Only Logging Rules
+
+This package does not create logs. Future HTTP, queue, or internal-service wrappers around it may log only metadata: request ID, tenant/user IDs, operation name, provider, status, error code, retryability, and latency.
+
+Wrappers must not log OAuth tokens, authorization headers, document text, selected text, replacement or insertion text, decrypted action payloads, prompts, model responses, or raw Google provider payloads.
+
 ## Future API Adapters
 
 HTTP or queue adapters should wrap this domain layer later. Those adapters should:

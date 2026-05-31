@@ -33,11 +33,11 @@ Canonical cross-repo tasks live in `../ai-assist-architecture/implementation-tas
 - [ ] DOCS-003: map Google-native revision/range/anchor semantics into connector-neutral verification results for orchestration.
 - [ ] DOCS-004: add real Google Docs safe replace/insert adapter with least-privilege scopes and updated revision metadata in successful results.
 - [ ] DOCS-004 / E2E-004: add integration tests for safe apply-action with revision/range/hash validation, idempotent duplicate handling, and conflict results.
-- [ ] DOCS-005: document and implement bounded timeout/retry policy separately for read, verify, and mutate operations.
+- [x] DOCS-005: document and implement bounded timeout/retry policy separately for read, verify, and mutate operations.
 - [ ] DOCS-005 / ACTION-006: add failure-mode validation for revoked OAuth, permission/quota errors, timeouts, stale documents, uncertain mutation results, and provider write failures.
 - [ ] ACTION-004: add internal service adapter and contract tests for idempotent apply-action handoff from orchestration.
-- [ ] ACTION-005: keep unsupported edit types rejected with typed unsupported-action errors.
-- [ ] OPS-003: add metadata-only logging adapter rules for future HTTP/internal adapters.
+- [x] ACTION-005: keep unsupported edit types rejected with typed unsupported-action errors.
+- [x] OPS-003: add metadata-only logging adapter rules for future HTTP/internal adapters.
 - [ ] OPS-004 / INFRA-004: add deployment pipeline checks for Google OAuth config, least-privilege scopes, metadata-only logs, metrics, and adapter dependency health.
 - [ ] Quality: raise line coverage to at least 95% after real adapter boundaries are added.
 

@@ -12,8 +12,10 @@ export class GoogleDocsAdapterError extends Error {
 export const ERROR_CODES = Object.freeze({
   VALIDATION_ERROR: "VALIDATION_ERROR",
   TOKEN_UNAVAILABLE: "TOKEN_UNAVAILABLE",
+  TOKEN_RECONNECT_REQUIRED: "TOKEN_RECONNECT_REQUIRED",
   PERMISSION_DENIED: "PERMISSION_DENIED",
   RATE_LIMITED: "RATE_LIMITED",
+  PROVIDER_TIMEOUT: "PROVIDER_TIMEOUT",
   PROVIDER_UNAVAILABLE: "PROVIDER_UNAVAILABLE",
   PROVIDER_ERROR: "PROVIDER_ERROR",
   RESOURCE_NOT_ACCESSIBLE: "RESOURCE_NOT_ACCESSIBLE",
@@ -31,12 +33,25 @@ export function isGoogleDocsAdapterError(error) {
   return error instanceof GoogleDocsAdapterError;
 }
 
-export function normalizeGoogleError(error, operation) {
+export function normalizeGoogleError(error, operation, { timeoutRetryable = true } = {}) {
   if (isGoogleDocsAdapterError(error)) {
     return error;
   }
 
   const status = error?.status ?? error?.code;
+  if (status === "TOKEN_REVOKED" || status === "TOKEN_EXPIRED" || status === "RECONNECT_REQUIRED") {
+    return adapterError(ERROR_CODES.TOKEN_RECONNECT_REQUIRED, "Google OAuth reconnect is required", {
+      httpStatus: 401,
+      details: { operation }
+    });
+  }
+  if (status === "ETIMEDOUT" || status === "TIMEOUT" || error?.name === "AbortError") {
+    return adapterError(ERROR_CODES.PROVIDER_TIMEOUT, "Google API request timed out", {
+      httpStatus: 504,
+      retryable: timeoutRetryable,
+      details: { operation }
+    });
+  }
   if (status === 401 || status === 403) {
     return adapterError(ERROR_CODES.PERMISSION_DENIED, "Google authorization failed", {
       httpStatus: 403,

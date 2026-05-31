@@ -264,6 +264,51 @@ test("applyReplaceInsert supports safe insert at verified anchor", async () => {
   assert.deepEqual(calls.mutations[0].targetAnchor, { index: 5 });
 });
 
+test("applyReplaceInsert rejects unsupported mutation types before provider mutation", async () => {
+  const { adapter, calls } = adapterWith({ revisionId: "rev-1", text: "Hello world" });
+
+  await assert.rejects(
+    () =>
+      adapter.applyReplaceInsert({
+        ...identity,
+        resourceId: "doc-1",
+        mutationType: "COMMENT_TEXT",
+        expectedRevision: "rev-1",
+        targetRange: { startIndex: 0, endIndex: 5 },
+        text: "comment",
+        idempotencyKey: "idem-3"
+      }),
+    {
+      code: ERROR_CODES.UNSUPPORTED_MUTATION,
+      httpStatus: 422
+    }
+  );
+  assert.equal(calls.tokens.length, 0);
+  assert.equal(calls.get.length, 0);
+  assert.equal(calls.mutations.length, 0);
+});
+
+test("verifyTarget rejects unsupported mutation types before provider access", async () => {
+  const { adapter, calls } = adapterWith({ revisionId: "rev-1", text: "Hello world" });
+
+  await assert.rejects(
+    () =>
+      adapter.verifyTarget({
+        ...identity,
+        resourceId: "doc-1",
+        mutationType: "COMMENT_TEXT",
+        expectedRevision: "rev-1",
+        targetRange: { startIndex: 0, endIndex: 5 }
+      }),
+    {
+      code: ERROR_CODES.UNSUPPORTED_MUTATION,
+      httpStatus: 422
+    }
+  );
+  assert.equal(calls.tokens.length, 0);
+  assert.equal(calls.get.length, 0);
+});
+
 test("Google provider errors are normalized", async () => {
   const calls = { tokens: [], get: [], mutations: [] };
   const adapter = new GoogleDocsAdapter({
@@ -296,4 +341,224 @@ test("Google provider errors are normalized", async () => {
     }
   );
   assert.deepEqual(calls.mutations, []);
+});
+
+test("read operations retry retryable provider failures within the configured limit", async () => {
+  const calls = { list: 0 };
+  const adapter = new GoogleDocsAdapter({
+    clock: () => NOW,
+    readRetryLimit: 1,
+    tokenProvider: {
+      async getAccessToken() {
+        return "token-1";
+      }
+    },
+    googleClient: {
+      async listDocuments() {
+        calls.list += 1;
+        if (calls.list === 1) {
+          const error = new Error("temporary");
+          error.status = 503;
+          throw error;
+        }
+        return { resources: [{ id: "doc-1", name: "Doc" }] };
+      }
+    }
+  });
+
+  const result = await adapter.listResources({ ...identity });
+
+  assert.equal(calls.list, 2);
+  assert.equal(result.resources[0].resourceId, "doc-1");
+});
+
+test("mutation writes are not blindly retried after provider failure", async () => {
+  let mutationCalls = 0;
+  const adapter = new GoogleDocsAdapter({
+    clock: () => NOW,
+    readRetryLimit: 1,
+    tokenProvider: {
+      async getAccessToken() {
+        return "token-1";
+      }
+    },
+    googleClient: {
+      async getDocument() {
+        return { revisionId: "rev-1", text: "Hello world" };
+      },
+      async applyTextMutation() {
+        mutationCalls += 1;
+        const error = new Error("write failed");
+        error.status = 503;
+        throw error;
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      adapter.applyReplaceInsert({
+        ...identity,
+        resourceId: "doc-1",
+        mutationType: MUTATION_TYPES.REPLACE_TEXT,
+        expectedRevision: "rev-1",
+        targetRange: { startIndex: 6, endIndex: 11 },
+        originalTextHash: hashContent("world"),
+        text: "there",
+        idempotencyKey: "idem-4"
+      }),
+    {
+      code: ERROR_CODES.PROVIDER_UNAVAILABLE,
+      retryable: true
+    }
+  );
+  assert.equal(mutationCalls, 1);
+});
+
+test("provider timeouts map to typed retryable dependency errors", async () => {
+  const adapter = new GoogleDocsAdapter({
+    clock: () => NOW,
+    operationTimeoutMs: 5,
+    readRetryLimit: 0,
+    tokenProvider: {
+      async getAccessToken() {
+        return "token-1";
+      }
+    },
+    googleClient: {
+      async getDocument() {
+        return new Promise(() => {});
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      adapter.readContext({
+        ...identity,
+        sessionId: "session-1",
+        resourceId: "doc-1",
+        contextMode: CONTEXT_MODES.ACTIVE_RESOURCE
+      }),
+    {
+      code: ERROR_CODES.PROVIDER_TIMEOUT,
+      httpStatus: 504,
+      retryable: true
+    }
+  );
+});
+
+test("mutation timeouts are typed but not marked retryable", async () => {
+  const adapter = new GoogleDocsAdapter({
+    clock: () => NOW,
+    operationTimeoutMs: 5,
+    readRetryLimit: 0,
+    tokenProvider: {
+      async getAccessToken() {
+        return "token-1";
+      }
+    },
+    googleClient: {
+      async getDocument() {
+        return { revisionId: "rev-1", text: "Hello world" };
+      },
+      async applyTextMutation() {
+        return new Promise(() => {});
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      adapter.applyReplaceInsert({
+        ...identity,
+        resourceId: "doc-1",
+        mutationType: MUTATION_TYPES.REPLACE_TEXT,
+        expectedRevision: "rev-1",
+        targetRange: { startIndex: 6, endIndex: 11 },
+        originalTextHash: hashContent("world"),
+        text: "there",
+        idempotencyKey: "idem-5"
+      }),
+    {
+      code: ERROR_CODES.PROVIDER_TIMEOUT,
+      httpStatus: 504,
+      retryable: false
+    }
+  );
+});
+
+test("provider-native mutation timeout errors are not marked retryable", async () => {
+  let mutationCalls = 0;
+  const adapter = new GoogleDocsAdapter({
+    clock: () => NOW,
+    tokenProvider: {
+      async getAccessToken() {
+        return "token-1";
+      }
+    },
+    googleClient: {
+      async getDocument() {
+        return { revisionId: "rev-1", text: "Hello world" };
+      },
+      async applyTextMutation() {
+        mutationCalls += 1;
+        const error = new Error("aborted");
+        error.name = "AbortError";
+        throw error;
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      adapter.applyReplaceInsert({
+        ...identity,
+        resourceId: "doc-1",
+        mutationType: MUTATION_TYPES.REPLACE_TEXT,
+        expectedRevision: "rev-1",
+        targetRange: { startIndex: 6, endIndex: 11 },
+        originalTextHash: hashContent("world"),
+        text: "there",
+        idempotencyKey: "idem-6"
+      }),
+    {
+      code: ERROR_CODES.PROVIDER_TIMEOUT,
+      httpStatus: 504,
+      retryable: false
+    }
+  );
+  assert.equal(mutationCalls, 1);
+});
+
+test("revoked token provider errors map to reconnect-required errors", async () => {
+  const adapter = new GoogleDocsAdapter({
+    clock: () => NOW,
+    tokenProvider: {
+      async getAccessToken() {
+        const error = new Error("revoked");
+        error.code = "TOKEN_REVOKED";
+        throw error;
+      }
+    },
+    googleClient: {
+      async getDocument() {
+        throw new Error("should not be called");
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      adapter.readContext({
+        ...identity,
+        sessionId: "session-1",
+        resourceId: "doc-1",
+        contextMode: CONTEXT_MODES.ACTIVE_RESOURCE
+      }),
+    {
+      code: ERROR_CODES.TOKEN_RECONNECT_REQUIRED,
+      httpStatus: 401
+    }
+  );
 });

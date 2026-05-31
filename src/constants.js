@@ -24,3 +24,5 @@ export const DEFAULT_PAGE_SIZE = 25;
 export const MAX_PAGE_SIZE = 100;
 export const DEFAULT_CONTEXT_TTL_MS = 15 * 60 * 1000;
 export const MAX_ACTIVE_RESOURCE_BYTES = 64 * 1024;
+export const DEFAULT_OPERATION_TIMEOUT_MS = 10_000;
+export const DEFAULT_READ_RETRY_LIMIT = 1;
