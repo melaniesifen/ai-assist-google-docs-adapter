@@ -40,6 +40,10 @@ HTTP or queue adapters should wrap this domain layer later. Those adapters shoul
 - Keep document text, OAuth tokens, and authorization headers out of logs.
 - Add real Google Docs and Drive API implementations behind the injected `googleClient` interface.
 
+## Task Breakdown
+
+Implementation tasks are tracked in [TASKS.md](TASKS.md). Update the checkboxes there in the same change that implements or verifies a task.
+
 ## Testing And Coverage
 
 Run the unit tests with either command:
