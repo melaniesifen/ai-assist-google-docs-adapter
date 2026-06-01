@@ -18,6 +18,24 @@ This package owns Google Docs connector domain behavior:
 
 This package intentionally has no Google SDK dependency and no third-party Python dependency. Production HTTP/API adapters should inject a Google client implementation and a token provider backed by the auth service token boundary.
 
+## Auth Token Handoff
+
+The adapter never reads OAuth token records directly. For every Google operation it calls the injected token provider with:
+
+- `tenantId`, `userId`, `provider`, `purpose`, `operation`
+- operation-specific `requiredScopes`
+- available `requestId`, `sessionId`, `resourceId`, `resourceRef`, `contextMode`, and `consentGrantId`
+
+The token provider must return an auth-service handoff object with `accessToken`, `status`, `scopes`, optional `expiresAt`, and optional `googleAccountId`. Revoked or expired status returns `TOKEN_RECONNECT_REQUIRED`. Missing required scopes return `PERMISSION_DENIED` before any Google client call.
+
+Least-privilege Google OAuth scope constants are exported by the package:
+
+- Resource discovery: `https://www.googleapis.com/auth/drive.metadata.readonly`
+- Context reads and target verification: `https://www.googleapis.com/auth/documents.readonly`
+- Safe replace/insert mutation: `https://www.googleapis.com/auth/documents`
+
+Google client implementations receive only the access token plus operation-specific request metadata. They must not log OAuth tokens, authorization headers, document text, selected text, or mutation payload text.
+
 ## Conflict Behavior
 
 The adapter validates before mutation. It does not call `applyTextMutation` when:

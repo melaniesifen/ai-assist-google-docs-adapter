@@ -6,18 +6,22 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from .constants import (
+    AUTH_TOKEN_PURPOSE,
     CONTEXT_MODE_ACTIVE_RESOURCE,
     CONTEXT_MODE_SELECTION,
     CONTEXT_MODES,
     DEFAULT_OPERATION_TIMEOUT_SECONDS,
     DEFAULT_PAGE_SIZE,
     DEFAULT_READ_RETRY_LIMIT,
+    LIST_RESOURCES_REQUIRED_SCOPES,
     MAX_ACTIVE_RESOURCE_BYTES,
     MAX_PAGE_SIZE,
+    MUTATE_DOCUMENT_REQUIRED_SCOPES,
     MUTATION_TYPE_INSERT_TEXT,
     MUTATION_TYPE_REPLACE_TEXT,
     MUTATION_TYPES,
     PROVIDER,
+    READ_CONTEXT_REQUIRED_SCOPES,
 )
 from .document import (
     document_revision,
@@ -31,9 +35,11 @@ from .document import (
 )
 from .errors import (
     CONTEXT_TOO_LARGE,
+    PERMISSION_DENIED,
     PROVIDER_ERROR,
     PROVIDER_TIMEOUT,
     TARGET_CONFLICT,
+    TOKEN_RECONNECT_REQUIRED,
     TOKEN_UNAVAILABLE,
     UNSUPPORTED_MUTATION,
     VALIDATION_ERROR,
@@ -67,7 +73,11 @@ class GoogleDocsAdapter:
 
     def list_resources(self, input_: dict[str, Any]) -> dict[str, Any]:
         assert_identity(input_)
-        access_token = self._access_token(input_, "listResources")
+        access_token = self._access_token(
+            input_,
+            "listResources",
+            required_scopes=LIST_RESOURCES_REQUIRED_SCOPES,
+        )
         page_size = _normalize_page_size(input_.get("pageSize"))
 
         try:
@@ -103,7 +113,11 @@ class GoogleDocsAdapter:
                 details={"field": "contextMode", "supportedModes": list(CONTEXT_MODES)},
             )
 
-        access_token = self._access_token(input_, "readContext")
+        access_token = self._access_token(
+            input_,
+            "readContext",
+            required_scopes=READ_CONTEXT_REQUIRED_SCOPES,
+        )
         try:
             document = self._google_read(
                 "readContext",
@@ -140,7 +154,9 @@ class GoogleDocsAdapter:
                     "metadata": {
                         "documentTitle": document.get("title"),
                         "contentBytes": len(content.encode("utf-8")),
+                        "modifiedTime": document.get("modifiedTime"),
                     },
+                    "revisionMetadata": _read_revision_metadata(document, revision),
                 },
                 now=self.clock(),
             )
@@ -154,7 +170,11 @@ class GoogleDocsAdapter:
         assert_non_empty_string(input_.get("mutationType"), "input.mutationType")
         assert_supported_mutation_type(input_["mutationType"])
 
-        access_token = self._access_token(input_, "verifyTarget")
+        access_token = self._access_token(
+            input_,
+            "verifyTarget",
+            required_scopes=READ_CONTEXT_REQUIRED_SCOPES,
+        )
         try:
             document = self._google_read(
                 "verifyTarget",
@@ -184,7 +204,11 @@ class GoogleDocsAdapter:
         assert_non_empty_string(input_.get("text"), "input.text")
         assert_non_empty_string(input_.get("idempotencyKey"), "input.idempotencyKey")
 
-        access_token = self._access_token(input_, "applyReplaceInsert")
+        access_token = self._access_token(
+            input_,
+            "applyReplaceInsert",
+            required_scopes=MUTATE_DOCUMENT_REQUIRED_SCOPES,
+        )
         try:
             document = self._google_read(
                 "applyReplaceInsert.verify",
@@ -230,29 +254,27 @@ class GoogleDocsAdapter:
                 provider_retryable=False,
             ) from error
 
-    def _access_token(self, input_: dict[str, Any], operation: str) -> str:
+    def _access_token(
+        self,
+        input_: dict[str, Any],
+        operation: str,
+        *,
+        required_scopes: tuple[str, ...],
+    ) -> str:
         try:
-            token = self._with_operation_timeout(
+            token_response = self._with_operation_timeout(
                 f"{operation}.token",
                 lambda: _call_method(
                     self.token_provider,
                     "get_access_token",
-                    {
-                        "tenantId": input_["tenantId"],
-                        "userId": input_["userId"],
-                        "provider": PROVIDER,
-                        "operation": operation,
-                    },
+                    _token_handoff_request(input_, operation, required_scopes),
                 ),
             )
-            if not isinstance(token, str) or len(token.strip()) == 0:
-                raise adapter_error(
-                    TOKEN_UNAVAILABLE,
-                    "Google access token is unavailable",
-                    http_status=401,
-                    details={"operation": operation},
-                )
-            return token
+            return _access_token_from_handoff(
+                token_response,
+                operation=operation,
+                required_scopes=required_scopes,
+            )
         except BaseException as error:
             raise normalize_google_error(error, operation) from error
 
@@ -382,6 +404,100 @@ def assert_supported_mutation_type(mutation_type: str) -> None:
         )
 
 
+def _token_handoff_request(
+    input_: dict[str, Any],
+    operation: str,
+    required_scopes: tuple[str, ...],
+) -> dict[str, Any]:
+    request = {
+        "tenantId": input_["tenantId"],
+        "userId": input_["userId"],
+        "provider": PROVIDER,
+        "purpose": AUTH_TOKEN_PURPOSE,
+        "operation": operation,
+        "requiredScopes": list(required_scopes),
+    }
+    for field_name in (
+        "requestId",
+        "sessionId",
+        "resourceId",
+        "contextMode",
+        "consentGrantId",
+    ):
+        if input_.get(field_name) is not None:
+            request[field_name] = input_[field_name]
+    if input_.get("resourceId") is not None:
+        request["resourceRef"] = {"provider": PROVIDER, "resourceId": input_["resourceId"]}
+    return request
+
+
+def _access_token_from_handoff(
+    token_response: Any,
+    *,
+    operation: str,
+    required_scopes: tuple[str, ...],
+) -> str:
+    assert_plain_object(token_response, "tokenProvider.getAccessToken result")
+    status = token_response.get("status")
+    if status in {"revoked", "expired", "reconnect_required"}:
+        raise adapter_error(
+            TOKEN_RECONNECT_REQUIRED,
+            "Google OAuth reconnect is required",
+            http_status=401,
+            details={"operation": operation},
+        )
+    if status != "active":
+        raise adapter_error(
+            TOKEN_UNAVAILABLE,
+            "Google token status is not active",
+            http_status=401,
+            details={"operation": operation, "status": status},
+        )
+
+    access_token = token_response.get("accessToken")
+    if not isinstance(access_token, str) or len(access_token.strip()) == 0:
+        raise adapter_error(
+            TOKEN_UNAVAILABLE,
+            "Google access token is unavailable",
+            http_status=401,
+            details={"operation": operation},
+        )
+
+    granted_scopes = _normalize_granted_scopes(token_response.get("scopes"))
+    missing_scopes = [scope for scope in required_scopes if scope not in granted_scopes]
+    if missing_scopes:
+        raise adapter_error(
+            PERMISSION_DENIED,
+            "Google OAuth token does not include required scopes",
+            http_status=403,
+            details={"operation": operation, "missingScopes": missing_scopes},
+        )
+
+    return access_token
+
+
+def _normalize_granted_scopes(scopes: Any) -> set[str]:
+    if isinstance(scopes, str):
+        return {scope for scope in scopes.split() if scope}
+    if isinstance(scopes, (list, tuple, set)):
+        normalized = set()
+        for scope in scopes:
+            if not isinstance(scope, str) or len(scope.strip()) == 0:
+                raise adapter_error(
+                    VALIDATION_ERROR,
+                    "token scopes must be non-empty strings",
+                    details={"field": "scopes"},
+                )
+            normalized.add(scope)
+        return normalized
+    raise adapter_error(
+        TOKEN_UNAVAILABLE,
+        "Google token scopes are unavailable",
+        http_status=401,
+        details={"field": "scopes"},
+    )
+
+
 def _selected_text(text: str, range_: dict[str, Any]) -> dict[str, Any]:
     normalized_range = normalize_range(range_, "selectionRange")
     content = provider_indexed_slice(
@@ -406,6 +522,13 @@ def _bounded_active_resource_text(text: str) -> str:
             details={"contentBytes": content_bytes, "maxBytes": MAX_ACTIVE_RESOURCE_BYTES},
         )
     return text
+
+
+def _read_revision_metadata(document: dict[str, Any], revision: str) -> dict[str, Any]:
+    metadata = {"provider": PROVIDER, "revisionId": revision}
+    if document.get("modifiedTime") is not None:
+        metadata["modifiedTime"] = document["modifiedTime"]
+    return metadata
 
 
 def _normalize_page_size(page_size: Any) -> int:

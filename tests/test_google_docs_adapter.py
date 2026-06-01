@@ -6,6 +6,9 @@ from ai_assist_google_docs_adapter import (
     CONTEXT_MODE_ACTIVE_RESOURCE,
     CONTEXT_MODE_SELECTION,
     ERROR_CODES,
+    GOOGLE_OAUTH_SCOPE_DOCUMENTS,
+    GOOGLE_OAUTH_SCOPE_DOCUMENTS_READONLY,
+    GOOGLE_OAUTH_SCOPE_DRIVE_METADATA_READONLY,
     GoogleDocsAdapter,
     GoogleDocsAdapterError,
     MAX_ACTIVE_RESOURCE_BYTES,
@@ -18,6 +21,11 @@ from ai_assist_google_docs_adapter import (
 
 NOW = datetime(2026, 5, 29, 12, 0, 0, tzinfo=timezone.utc)
 IDENTITY = {"tenantId": "tenant-1", "userId": "user-1"}
+ALL_SCOPES = [
+    GOOGLE_OAUTH_SCOPE_DRIVE_METADATA_READONLY,
+    GOOGLE_OAUTH_SCOPE_DOCUMENTS_READONLY,
+    GOOGLE_OAUTH_SCOPE_DOCUMENTS,
+]
 
 
 class StatusError(Exception):
@@ -42,7 +50,7 @@ class FakeDependencies:
 
         def get_access_token(self, input_):
             self.calls["tokens"].append(input_)
-            return "token-1"
+            return token_response(scopes=input_["requiredScopes"])
 
     class GoogleClient:
         def __init__(self, calls, document):
@@ -83,6 +91,25 @@ def adapter_with(document=None):
     )
 
 
+def token_response(*, scopes=ALL_SCOPES, status="active"):
+    return {
+        "accessToken": "token-1",
+        "status": status,
+        "scopes": scopes,
+        "expiresAt": "2026-05-29T13:00:00.000Z",
+        "googleAccountId": "google-user-1",
+    }
+
+
+def token_response_without_access_token(*, scopes=ALL_SCOPES, status="active"):
+    return {
+        "status": status,
+        "scopes": scopes,
+        "expiresAt": "2026-05-29T13:00:00.000Z",
+        "googleAccountId": "google-user-1",
+    }
+
+
 class GoogleDocsAdapterTests(unittest.TestCase):
     def assert_adapter_error(self, callable_, *, code, http_status=None, retryable=None, details=None):
         with self.assertRaises(GoogleDocsAdapterError) as raised:
@@ -100,9 +127,13 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_list_resources_uses_injected_token_provider_and_google_client(self):
         adapter, calls = adapter_with()
 
-        result = adapter.list_resources({**IDENTITY, "pageSize": 10})
+        result = adapter.list_resources({**IDENTITY, "pageSize": 10, "requestId": "req-1"})
 
         self.assertEqual(calls["tokens"][0]["provider"], "google_docs")
+        self.assertEqual(calls["tokens"][0]["purpose"], "google_docs_api")
+        self.assertEqual(calls["tokens"][0]["operation"], "listResources")
+        self.assertEqual(calls["tokens"][0]["requestId"], "req-1")
+        self.assertEqual(calls["tokens"][0]["requiredScopes"], [GOOGLE_OAUTH_SCOPE_DRIVE_METADATA_READONLY])
         self.assertEqual(calls["list"][0]["accessToken"], "token-1")
         self.assertEqual(
             result,
@@ -116,6 +147,11 @@ class GoogleDocsAdapterTests(unittest.TestCase):
                         "mimeType": "application/vnd.google-apps.document",
                         "modifiedTime": "2026-05-29T11:00:00.000Z",
                         "webUrl": None,
+                        "resourceRevision": None,
+                        "revisionMetadata": {
+                            "provider": "google_docs",
+                            "modifiedTime": "2026-05-29T11:00:00.000Z",
+                        },
                     }
                 ],
                 "nextPageToken": None,
@@ -136,6 +172,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
 
         self.assertEqual(context["provider"], "google_docs")
         self.assertEqual(context["resourceRevision"], "rev-1")
+        self.assertEqual(context["revisionMetadata"], {"provider": "google_docs", "revisionId": "rev-1"})
         self.assertEqual(context["sourceType"], "connector_resource_excerpt")
         self.assertEqual(context["trustLevel"], "connector_verified")
         self.assertEqual(context["content"], "Alpha beta")
@@ -158,6 +195,179 @@ class GoogleDocsAdapterTests(unittest.TestCase):
         self.assertEqual(context["sourceType"], "connector_selection")
         self.assertEqual(context["content"], "Alpha")
         self.assertEqual(context["anchors"]["targetRange"], {"startIndex": 0, "endIndex": 5})
+
+    def test_read_context_token_handoff_includes_session_resource_mode_and_read_scope(self):
+        adapter, calls = adapter_with({"revisionId": "rev-1", "text": "Alpha beta", "title": "Doc"})
+
+        adapter.read_context(
+            {
+                **IDENTITY,
+                "requestId": "req-read",
+                "sessionId": "session-1",
+                "resourceId": "doc-1",
+                "contextMode": CONTEXT_MODE_SELECTION,
+                "consentGrantId": "grant-1",
+                "selectionRange": {"startIndex": 0, "endIndex": 5},
+            }
+        )
+
+        self.assertEqual(
+            calls["tokens"][0],
+            {
+                **IDENTITY,
+                "provider": "google_docs",
+                "purpose": "google_docs_api",
+                "operation": "readContext",
+                "requiredScopes": [GOOGLE_OAUTH_SCOPE_DOCUMENTS_READONLY],
+                "requestId": "req-read",
+                "sessionId": "session-1",
+                "resourceId": "doc-1",
+                "contextMode": CONTEXT_MODE_SELECTION,
+                "consentGrantId": "grant-1",
+                "resourceRef": {"provider": "google_docs", "resourceId": "doc-1"},
+            },
+        )
+
+    def test_token_handoff_never_receives_document_text_or_selection_payload(self):
+        adapter, calls = adapter_with({"revisionId": "rev-1", "text": "Alpha beta", "title": "Doc"})
+
+        adapter.read_context(
+            {
+                **IDENTITY,
+                "sessionId": "session-1",
+                "resourceId": "doc-1",
+                "contextMode": CONTEXT_MODE_SELECTION,
+                "selectionRange": {"startIndex": 0, "endIndex": 5},
+            }
+        )
+
+        self.assertNotIn("selectionRange", calls["tokens"][0])
+        self.assertNotIn("content", calls["tokens"][0])
+        self.assertNotIn("text", calls["tokens"][0])
+
+    def test_token_handoff_rejects_missing_required_google_scope_before_provider_call(self):
+        class TokenProvider:
+            def get_access_token(self, input_):
+                return token_response(scopes=[])
+
+        class GoogleClient:
+            def get_document(self, input_):
+                raise AssertionError("should not be called")
+
+        adapter = GoogleDocsAdapter(
+            google_client=GoogleClient(),
+            token_provider=TokenProvider(),
+            clock=lambda: NOW,
+        )
+
+        self.assert_adapter_error(
+            lambda: adapter.read_context(
+                {
+                    **IDENTITY,
+                    "sessionId": "session-1",
+                    "resourceId": "doc-1",
+                    "contextMode": CONTEXT_MODE_ACTIVE_RESOURCE,
+                }
+            ),
+            code=ERROR_CODES["PERMISSION_DENIED"],
+            http_status=403,
+            details={
+                "operation": "readContext",
+                "missingScopes": [GOOGLE_OAUTH_SCOPE_DOCUMENTS_READONLY],
+            },
+        )
+
+    def test_token_handoff_status_reconnect_states_do_not_require_access_token(self):
+        for status in ("revoked", "expired", "reconnect_required"):
+            with self.subTest(status=status):
+                calls = {"get": []}
+
+                class TokenProvider:
+                    def get_access_token(self, input_):
+                        return token_response_without_access_token(
+                            scopes=input_["requiredScopes"],
+                            status=status,
+                        )
+
+                class GoogleClient:
+                    def get_document(self, input_):
+                        calls["get"].append(input_)
+                        raise AssertionError("should not be called")
+
+                adapter = GoogleDocsAdapter(
+                    google_client=GoogleClient(),
+                    token_provider=TokenProvider(),
+                    clock=lambda: NOW,
+                )
+
+                self.assert_adapter_error(
+                    lambda: adapter.read_context(
+                        {
+                            **IDENTITY,
+                            "sessionId": "session-1",
+                            "resourceId": "doc-1",
+                            "contextMode": CONTEXT_MODE_ACTIVE_RESOURCE,
+                        }
+                    ),
+                    code=ERROR_CODES["TOKEN_RECONNECT_REQUIRED"],
+                    http_status=401,
+                )
+                self.assertEqual(calls["get"], [])
+
+    def test_token_handoff_rejects_missing_or_unknown_status_before_provider_call(self):
+        for response in (
+            {"accessToken": "token-1", "scopes": ALL_SCOPES},
+            token_response(status="pending"),
+        ):
+            with self.subTest(response=response):
+                calls = {"get": []}
+
+                class TokenProvider:
+                    def get_access_token(self, input_):
+                        return response
+
+                class GoogleClient:
+                    def get_document(self, input_):
+                        calls["get"].append(input_)
+                        raise AssertionError("should not be called")
+
+                adapter = GoogleDocsAdapter(
+                    google_client=GoogleClient(),
+                    token_provider=TokenProvider(),
+                    clock=lambda: NOW,
+                )
+
+                self.assert_adapter_error(
+                    lambda: adapter.read_context(
+                        {
+                            **IDENTITY,
+                            "sessionId": "session-1",
+                            "resourceId": "doc-1",
+                            "contextMode": CONTEXT_MODE_ACTIVE_RESOURCE,
+                        }
+                    ),
+                    code=ERROR_CODES["TOKEN_UNAVAILABLE"],
+                    http_status=401,
+                )
+                self.assertEqual(calls["get"], [])
+
+    def test_apply_replace_insert_requests_mutation_scope_from_token_boundary(self):
+        adapter, calls = adapter_with({"revisionId": "rev-1", "text": "Hello world"})
+
+        adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_REPLACE_TEXT,
+                "expectedRevision": "rev-1",
+                "targetRange": {"startIndex": 6, "endIndex": 11},
+                "originalTextHash": hash_content("world"),
+                "text": "there",
+                "idempotencyKey": "idem-scope",
+            }
+        )
+
+        self.assertEqual(calls["tokens"][0]["requiredScopes"], [GOOGLE_OAUTH_SCOPE_DOCUMENTS])
 
     def test_read_context_uses_google_docs_provider_indexes_for_non_bmp_selection(self):
         adapter, _ = adapter_with({"revisionId": "rev-1", "text": "A😀B", "title": "Doc"})
@@ -431,7 +641,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_google_provider_errors_are_normalized(self):
         class TokenProvider:
             def get_access_token(self, input_):
-                return "token-1"
+                return token_response(scopes=input_["requiredScopes"])
 
         class GoogleClient:
             def get_document(self, input_):
@@ -459,7 +669,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_google_permission_errors_map_to_permission_denied(self):
         class TokenProvider:
             def get_access_token(self, input_):
-                return "token-1"
+                return token_response(scopes=input_["requiredScopes"])
 
         class GoogleClient:
             def get_document(self, input_):
@@ -488,7 +698,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_read_operations_retry_retryable_provider_failures_within_limit(self):
         class TokenProvider:
             def get_access_token(self, input_):
-                return "token-1"
+                return token_response(scopes=input_["requiredScopes"])
 
         class GoogleClient:
             def __init__(self):
@@ -516,7 +726,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_mutation_writes_are_not_blindly_retried_after_provider_failure(self):
         class TokenProvider:
             def get_access_token(self, input_):
-                return "token-1"
+                return token_response(scopes=input_["requiredScopes"])
 
         class GoogleClient:
             def __init__(self):
@@ -558,7 +768,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_mutation_rate_limits_are_not_retryable_after_provider_write_attempt(self):
         class TokenProvider:
             def get_access_token(self, input_):
-                return "token-1"
+                return token_response(scopes=input_["requiredScopes"])
 
         class GoogleClient:
             def __init__(self):
@@ -600,7 +810,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_provider_timeouts_map_to_typed_retryable_dependency_errors(self):
         class TokenProvider:
             def get_access_token(self, input_):
-                return "token-1"
+                return token_response(scopes=input_["requiredScopes"])
 
         class GoogleClient:
             def get_document(self, input_):
@@ -632,7 +842,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_mutation_timeouts_are_typed_but_not_marked_retryable(self):
         class TokenProvider:
             def get_access_token(self, input_):
-                return "token-1"
+                return token_response(scopes=input_["requiredScopes"])
 
         class GoogleClient:
             def get_document(self, input_):
@@ -671,7 +881,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_provider_native_mutation_timeout_errors_are_not_marked_retryable(self):
         class TokenProvider:
             def get_access_token(self, input_):
-                return "token-1"
+                return token_response(scopes=input_["requiredScopes"])
 
         class GoogleClient:
             def __init__(self):

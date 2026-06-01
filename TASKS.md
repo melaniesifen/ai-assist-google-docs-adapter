@@ -24,8 +24,9 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 
 - [ ] REPO-001: decide final language/runtime, framework, package manager, package layout, migration cost, deployment target, and test strategy for this repo.
 - [x] REPO-002: migrate the Google Docs adapter bootstrap to a Python package layout with equivalent behavior and tests before broad new feature work continues.
-- [ ] AUTH-003: integrate token access with the auth service boundary, including revoked/expired Google token reconnect-required errors.
-- [ ] AUTH-003: define exact least-privilege Google OAuth scopes for resource listing, context reads, and safe replace/insert.
+- [x] AUTH-003: integrate token access with the auth service boundary, including revoked/expired Google token reconnect-required errors.
+- [x] AUTH-003: define exact least-privilege Google OAuth scopes for resource listing, context reads, and safe replace/insert.
+- [x] DOCS-001 / DOCS-002: define first production adapter request/response shapes for authorized resource discovery and read-context handoff using injected clients.
 - [ ] CTX-005: align connector interface inputs/outputs with shared contracts for list resources, read context, verify target, and apply safe mutation.
 - [ ] DOCS-001: add real Google Drive/Docs resource discovery adapter using authorized OAuth tokens and metadata-only responses.
 - [ ] DOCS-001: add contract tests for permission, quota, revoked-token, timeout, and provider failure normalization.

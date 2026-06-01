@@ -25,6 +25,7 @@ def normalize_resource(resource: dict[str, Any]) -> dict[str, Any]:
     resource_id = resource.get("resourceId") or resource.get("id")
     assert_non_empty_string(resource_id, "resource.resourceId")
     assert_non_empty_string(resource.get("name"), "resource.name")
+    revision = resource.get("revisionId") or resource.get("revision") or resource.get("version")
     return {
         "provider": PROVIDER,
         "resourceType": "document",
@@ -33,6 +34,8 @@ def normalize_resource(resource: dict[str, Any]) -> dict[str, Any]:
         "mimeType": resource.get("mimeType") or "application/vnd.google-apps.document",
         "modifiedTime": resource.get("modifiedTime"),
         "webUrl": resource.get("webViewLink") or resource.get("webUrl"),
+        "resourceRevision": revision,
+        "revisionMetadata": _revision_metadata(revision=revision, modified_time=resource.get("modifiedTime")),
     }
 
 
@@ -94,6 +97,10 @@ def normalize_read_context(
     anchors = input_.get("anchors") or {}
     revision = input_.get("resourceRevision")
     content = input_["content"]
+    revision_metadata = input_.get("revisionMetadata") or _revision_metadata(
+        revision=revision,
+        modified_time=(input_.get("metadata") or {}).get("modifiedTime"),
+    )
 
     return {
         "contextId": input_.get("contextId"),
@@ -109,6 +116,7 @@ def normalize_read_context(
         "contentHash": hash_content(content),
         "anchors": anchors,
         "resourceRevision": revision,
+        "revisionMetadata": revision_metadata,
         "metadata": input_.get("metadata") or {},
         "provenance": {
             "sourceType": source_type,
@@ -252,3 +260,12 @@ def _format_datetime(value: datetime) -> str:
         value = value.replace(tzinfo=timezone.utc)
     value = value.astimezone(timezone.utc)
     return value.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _revision_metadata(*, revision: Any, modified_time: Any = None) -> dict[str, Any]:
+    metadata = {"provider": PROVIDER}
+    if revision is not None:
+        metadata["revisionId"] = revision
+    if modified_time is not None:
+        metadata["modifiedTime"] = modified_time
+    return metadata
