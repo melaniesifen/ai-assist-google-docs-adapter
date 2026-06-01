@@ -83,7 +83,8 @@ Implementation tasks are tracked in [TASKS.md](TASKS.md). Update the checkboxes 
 Run the unit tests with the standard library test runner:
 
 ```sh
-python3 -m unittest discover -s tests
+PYTHONPATH=src python3 -m unittest discover -s tests
+PYTHONPATH=src python3 -m compileall src tests
 ```
 
 No virtual environment or package install is required for the current local test suite. If later work adds third-party libraries, add repo-local dependency manifests and document the install command in this section.

@@ -10,4 +10,5 @@ requires-python = ">=3.11"
 dependencies = []
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["ai_assist_google_docs_adapter*"]

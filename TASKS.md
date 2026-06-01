@@ -19,6 +19,7 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] DOCS-001 / DOCS-004 repo-local: normalize validation, stale resource, target conflict, permission, rate-limit, and provider failure errors.
 - [x] OPS-003 bootstrap: keep OAuth tokens, authorization headers, and document text out of this package's logging surface.
 - [x] Repo hygiene: document tests and coverage commands, and ignore prompts, feedback, coverage output, dependencies, and build artifacts.
+- [x] Repo layout: standardize the Python package under `src/ai_assist_google_docs_adapter/` and document `PYTHONPATH=src` unittest and compile checks.
 
 ## Pending Architecture Tasks
 
