@@ -21,6 +21,15 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] Repo hygiene: document tests and coverage commands, and ignore prompts, feedback, coverage output, dependencies, and build artifacts.
 - [x] Repo layout: standardize the Python package under `src/ai_assist_google_docs_adapter/` and document `PYTHONPATH=src` unittest and compile checks.
 
+## Completed M4 Read Path
+
+- [x] M4-T3 / CTX-005: align fake-client resource-list results and read-context results with shared connector contract shapes.
+- [x] M4-T3 / AUTH-003: verify injected token-provider handoff for resource listing and read-context operations.
+- [x] M4-T3 / DOCS-001: verify fake-client resource discovery returns metadata-only connector resource refs.
+- [x] M4-T3 / DOCS-002: verify fake-client `SELECTION` read context includes connector-verified provenance and range anchors.
+- [x] M4-T3 / DOCS-002: verify fake-client `ACTIVE_RESOURCE` read context includes revision and content hash metadata.
+- [x] M4-T3 / DOCS-001 / DOCS-002: verify permission, quota/rate-limit, timeout, reconnect-required, and oversized-context failures.
+
 ## Pending Architecture Tasks
 
 - [ ] REPO-001: decide final language/runtime, framework, package manager, package layout, migration cost, deployment target, and test strategy for this repo.
@@ -28,9 +37,9 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] AUTH-003: integrate token access with the auth service boundary, including revoked/expired Google token reconnect-required errors.
 - [x] AUTH-003: define exact least-privilege Google OAuth scopes for resource listing, context reads, and safe replace/insert.
 - [x] DOCS-001 / DOCS-002: define first production adapter request/response shapes for authorized resource discovery and read-context handoff using injected clients.
-- [ ] CTX-005: align connector interface inputs/outputs with shared contracts for list resources, read context, verify target, and apply safe mutation.
+- [ ] CTX-005: align connector interface inputs/outputs with shared contracts for verify target and apply safe mutation.
 - [ ] DOCS-001: add real Google Drive/Docs resource discovery adapter using authorized OAuth tokens and metadata-only responses.
-- [ ] DOCS-001: add contract tests for permission, quota, revoked-token, timeout, and provider failure normalization.
+- [x] DOCS-001: add fake-client contract tests for permission, quota, revoked-token, timeout, and provider failure normalization.
 - [ ] DOCS-001 / E2E-001: add integration tests for authorized resource discovery with auth-service token handoff and metadata-only results.
 - [ ] DOCS-002: add real Google Docs read-context adapter for `SELECTION` and `ACTIVE_RESOURCE` with revision metadata and no document-text logs.
 - [ ] DOCS-002 / E2E-002: add integration tests for read-context handoff to context/orchestration using connector-verified normalized context.

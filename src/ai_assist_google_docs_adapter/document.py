@@ -27,13 +27,14 @@ def normalize_resource(resource: dict[str, Any]) -> dict[str, Any]:
     assert_non_empty_string(resource.get("name"), "resource.name")
     revision = resource.get("revisionId") or resource.get("revision") or resource.get("version")
     return {
+        "connector": PROVIDER,
         "provider": PROVIDER,
         "resourceType": "document",
         "resourceId": resource_id,
-        "name": resource["name"],
+        "displayName": resource["name"],
         "mimeType": resource.get("mimeType") or "application/vnd.google-apps.document",
         "modifiedTime": resource.get("modifiedTime"),
-        "webUrl": resource.get("webViewLink") or resource.get("webUrl"),
+        "externalUrl": resource.get("webViewLink") or resource.get("webUrl"),
         "resourceRevision": revision,
         "revisionMetadata": _revision_metadata(revision=revision, modified_time=resource.get("modifiedTime")),
     }
@@ -108,7 +109,18 @@ def normalize_read_context(
         "userId": input_["userId"],
         "sessionId": input_["sessionId"],
         "provider": PROVIDER,
-        "resourceRef": {"provider": PROVIDER, "resourceId": input_["resourceId"]},
+        "connector": PROVIDER,
+        "resourceRef": {
+            "connector": PROVIDER,
+            "provider": PROVIDER,
+            "resourceId": input_["resourceId"],
+            "resourceType": "document",
+            **(
+                {"displayName": input_["resourceName"]}
+                if input_.get("resourceName") is not None
+                else {}
+            ),
+        },
         "contextMode": input_["contextMode"],
         "sourceType": source_type,
         "trustLevel": TRUST_LEVEL_CONNECTOR_VERIFIED,
@@ -124,7 +136,11 @@ def normalize_read_context(
             "connector": PROVIDER,
             "resourceId": input_["resourceId"],
             "resourceVersion": revision,
-            "selectionAnchor": anchors.get("selectionAnchor"),
+            **(
+                {"selectionAnchor": anchors["selectionAnchor"]}
+                if anchors.get("selectionAnchor") is not None
+                else {}
+            ),
             "capturedAt": captured_at,
             "clientSupplied": False,
             "connectorVerified": True,

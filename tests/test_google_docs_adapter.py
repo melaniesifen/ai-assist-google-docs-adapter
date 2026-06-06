@@ -140,13 +140,14 @@ class GoogleDocsAdapterTests(unittest.TestCase):
             {
                 "resources": [
                     {
+                        "connector": "google_docs",
                         "provider": "google_docs",
                         "resourceType": "document",
                         "resourceId": "doc-1",
-                        "name": "Doc",
+                        "displayName": "Doc",
                         "mimeType": "application/vnd.google-apps.document",
                         "modifiedTime": "2026-05-29T11:00:00.000Z",
-                        "webUrl": None,
+                        "externalUrl": None,
                         "resourceRevision": None,
                         "revisionMetadata": {
                             "provider": "google_docs",
@@ -161,7 +162,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_read_context_returns_connector_verified_active_resource_context(self):
         adapter, _ = adapter_with({"revisionId": "rev-1", "text": "Alpha beta", "title": "Doc"})
 
-        context = adapter.read_context(
+        result = adapter.read_context(
             {
                 **IDENTITY,
                 "sessionId": "session-1",
@@ -169,8 +170,21 @@ class GoogleDocsAdapterTests(unittest.TestCase):
                 "contextMode": CONTEXT_MODE_ACTIVE_RESOURCE,
             }
         )
+        context = result["context"]
 
+        self.assertEqual(result["resourceRevision"], "rev-1")
         self.assertEqual(context["provider"], "google_docs")
+        self.assertEqual(context["connector"], "google_docs")
+        self.assertEqual(
+            context["resourceRef"],
+            {
+                "connector": "google_docs",
+                "provider": "google_docs",
+                "resourceId": "doc-1",
+                "resourceType": "document",
+                "displayName": "Doc",
+            },
+        )
         self.assertEqual(context["resourceRevision"], "rev-1")
         self.assertEqual(context["revisionMetadata"], {"provider": "google_docs", "revisionId": "rev-1"})
         self.assertEqual(context["sourceType"], "connector_resource_excerpt")
@@ -182,7 +196,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_read_context_returns_connector_verified_selected_text_and_target_range(self):
         adapter, _ = adapter_with({"revisionId": "rev-1", "text": "Alpha beta", "title": "Doc"})
 
-        context = adapter.read_context(
+        result = adapter.read_context(
             {
                 **IDENTITY,
                 "sessionId": "session-1",
@@ -191,10 +205,21 @@ class GoogleDocsAdapterTests(unittest.TestCase):
                 "selectionRange": {"startIndex": 0, "endIndex": 5},
             }
         )
+        context = result["context"]
 
         self.assertEqual(context["sourceType"], "connector_selection")
         self.assertEqual(context["content"], "Alpha")
-        self.assertEqual(context["anchors"]["targetRange"], {"startIndex": 0, "endIndex": 5})
+        self.assertEqual(
+            context["anchors"],
+            {
+                "selectionAnchor": {"range": {"startIndex": 0, "endIndex": 5}},
+                "targetRange": {"startIndex": 0, "endIndex": 5},
+            },
+        )
+        self.assertEqual(
+            context["provenance"]["selectionAnchor"],
+            {"range": {"startIndex": 0, "endIndex": 5}},
+        )
 
     def test_read_context_token_handoff_includes_session_resource_mode_and_read_scope(self):
         adapter, calls = adapter_with({"revisionId": "rev-1", "text": "Alpha beta", "title": "Doc"})
@@ -224,7 +249,12 @@ class GoogleDocsAdapterTests(unittest.TestCase):
                 "resourceId": "doc-1",
                 "contextMode": CONTEXT_MODE_SELECTION,
                 "consentGrantId": "grant-1",
-                "resourceRef": {"provider": "google_docs", "resourceId": "doc-1"},
+                "resourceRef": {
+                    "connector": "google_docs",
+                    "provider": "google_docs",
+                    "resourceId": "doc-1",
+                    "resourceType": "document",
+                },
             },
         )
 
@@ -372,7 +402,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_read_context_uses_google_docs_provider_indexes_for_non_bmp_selection(self):
         adapter, _ = adapter_with({"revisionId": "rev-1", "text": "A😀B", "title": "Doc"})
 
-        context = adapter.read_context(
+        result = adapter.read_context(
             {
                 **IDENTITY,
                 "sessionId": "session-1",
@@ -381,6 +411,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
                 "selectionRange": {"startIndex": 1, "endIndex": 3},
             }
         )
+        context = result["context"]
 
         self.assertEqual(context["content"], "😀")
         self.assertEqual(context["contentHash"], hash_content("😀"))
@@ -425,7 +456,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_read_context_accepts_active_resource_context_at_the_byte_limit(self):
         adapter, _ = adapter_with({"revisionId": "rev-1", "text": "a" * MAX_ACTIVE_RESOURCE_BYTES, "title": "Doc"})
 
-        context = adapter.read_context(
+        result = adapter.read_context(
             {
                 **IDENTITY,
                 "sessionId": "session-1",
@@ -433,6 +464,7 @@ class GoogleDocsAdapterTests(unittest.TestCase):
                 "contextMode": CONTEXT_MODE_ACTIVE_RESOURCE,
             }
         )
+        context = result["context"]
 
         self.assertEqual(len(context["content"]), MAX_ACTIVE_RESOURCE_BYTES)
 
@@ -722,6 +754,140 @@ class GoogleDocsAdapterTests(unittest.TestCase):
 
         self.assertEqual(google_client.list_calls, 2)
         self.assertEqual(result["resources"][0]["resourceId"], "doc-1")
+        self.assertEqual(result["resources"][0]["connector"], "google_docs")
+
+    def test_list_resources_permission_errors_map_to_permission_denied(self):
+        class TokenProvider:
+            def get_access_token(self, input_):
+                return token_response(scopes=input_["requiredScopes"])
+
+        class GoogleClient:
+            def list_documents(self, input_):
+                raise StatusError(status=403)
+
+        adapter = GoogleDocsAdapter(
+            google_client=GoogleClient(),
+            token_provider=TokenProvider(),
+            clock=lambda: NOW,
+        )
+
+        self.assert_adapter_error(
+            lambda: adapter.list_resources({**IDENTITY}),
+            code=ERROR_CODES["PERMISSION_DENIED"],
+            http_status=403,
+            retryable=False,
+        )
+
+    def test_list_resources_rate_limits_remain_retryable_after_retry_limit(self):
+        class TokenProvider:
+            def get_access_token(self, input_):
+                return token_response(scopes=input_["requiredScopes"])
+
+        class GoogleClient:
+            def __init__(self):
+                self.list_calls = 0
+
+            def list_documents(self, input_):
+                self.list_calls += 1
+                raise StatusError(status=429)
+
+        google_client = GoogleClient()
+        adapter = GoogleDocsAdapter(
+            google_client=google_client,
+            token_provider=TokenProvider(),
+            clock=lambda: NOW,
+            read_retry_limit=1,
+        )
+
+        self.assert_adapter_error(
+            lambda: adapter.list_resources({**IDENTITY}),
+            code=ERROR_CODES["RATE_LIMITED"],
+            http_status=429,
+            retryable=True,
+        )
+        self.assertEqual(google_client.list_calls, 2)
+
+    def test_list_resources_timeouts_map_to_typed_retryable_dependency_errors(self):
+        class TokenProvider:
+            def get_access_token(self, input_):
+                return token_response(scopes=input_["requiredScopes"])
+
+        class GoogleClient:
+            def list_documents(self, input_):
+                time.sleep(0.05)
+                return {"resources": []}
+
+        adapter = GoogleDocsAdapter(
+            google_client=GoogleClient(),
+            token_provider=TokenProvider(),
+            clock=lambda: NOW,
+            operation_timeout_seconds=0.001,
+            read_retry_limit=0,
+        )
+
+        self.assert_adapter_error(
+            lambda: adapter.list_resources({**IDENTITY}),
+            code=ERROR_CODES["PROVIDER_TIMEOUT"],
+            http_status=504,
+            retryable=True,
+        )
+
+    def test_list_resources_reconnect_required_skips_google_client(self):
+        calls = {"list": []}
+
+        class TokenProvider:
+            def get_access_token(self, input_):
+                return token_response_without_access_token(
+                    scopes=input_["requiredScopes"],
+                    status="reconnect_required",
+                )
+
+        class GoogleClient:
+            def list_documents(self, input_):
+                calls["list"].append(input_)
+                raise AssertionError("should not be called")
+
+        adapter = GoogleDocsAdapter(
+            google_client=GoogleClient(),
+            token_provider=TokenProvider(),
+            clock=lambda: NOW,
+        )
+
+        self.assert_adapter_error(
+            lambda: adapter.list_resources({**IDENTITY}),
+            code=ERROR_CODES["TOKEN_RECONNECT_REQUIRED"],
+            http_status=401,
+        )
+        self.assertEqual(calls["list"], [])
+
+    def test_list_resources_missing_metadata_scope_skips_google_client(self):
+        calls = {"list": []}
+
+        class TokenProvider:
+            def get_access_token(self, input_):
+                return token_response(scopes=[])
+
+        class GoogleClient:
+            def list_documents(self, input_):
+                calls["list"].append(input_)
+                raise AssertionError("should not be called")
+
+        adapter = GoogleDocsAdapter(
+            google_client=GoogleClient(),
+            token_provider=TokenProvider(),
+            clock=lambda: NOW,
+        )
+
+        self.assert_adapter_error(
+            lambda: adapter.list_resources({**IDENTITY}),
+            code=ERROR_CODES["PERMISSION_DENIED"],
+            http_status=403,
+            details={
+                "operation": "listResources",
+                "missingScopes": [GOOGLE_OAUTH_SCOPE_DRIVE_METADATA_READONLY],
+            },
+        )
+        self.assertEqual(calls["list"], [])
 
     def test_mutation_writes_are_not_blindly_retried_after_provider_failure(self):
         class TokenProvider:

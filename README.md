@@ -36,6 +36,20 @@ Least-privilege Google OAuth scope constants are exported by the package:
 
 Google client implementations receive only the access token plus operation-specific request metadata. They must not log OAuth tokens, authorization headers, document text, selected text, or mutation payload text.
 
+## Connector Contract Shapes
+
+Resource discovery returns the shared connector resource-list result shape:
+`resources` contains metadata-only resource refs with `connector`,
+`resourceId`, `resourceType`, optional `displayName`, optional `externalUrl`,
+and adapter-local revision metadata. It does not return document text.
+
+Read context returns the shared connector read-context result shape:
+`context` contains normalized connector-verified context and
+`resourceRevision` repeats the provider revision used for the read. The nested
+context uses shared `resourceRef` fields, object-shaped anchor metadata for the
+current Python context-service handoff, content hash, provenance,
+capture/expiry timestamps, and metadata-only revision details.
+
 ## Conflict Behavior
 
 The adapter validates before mutation. It does not call `applyTextMutation` when:

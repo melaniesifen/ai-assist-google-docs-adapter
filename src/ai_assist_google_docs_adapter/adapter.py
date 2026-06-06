@@ -140,13 +140,14 @@ class GoogleDocsAdapter:
                 content = _bounded_active_resource_text(text)
                 anchors = {}
 
-            return normalize_read_context(
+            context = normalize_read_context(
                 {
                     "contextId": input_.get("contextId") or str(uuid4()),
                     "tenantId": input_["tenantId"],
                     "userId": input_["userId"],
                     "sessionId": input_["sessionId"],
                     "resourceId": input_["resourceId"],
+                    "resourceName": document.get("title"),
                     "contextMode": input_["contextMode"],
                     "content": content,
                     "resourceRevision": revision,
@@ -160,6 +161,10 @@ class GoogleDocsAdapter:
                 },
                 now=self.clock(),
             )
+            return {
+                "context": context,
+                "resourceRevision": revision,
+            }
         except BaseException as error:
             raise normalize_google_error(error, "readContext") from error
 
@@ -427,7 +432,12 @@ def _token_handoff_request(
         if input_.get(field_name) is not None:
             request[field_name] = input_[field_name]
     if input_.get("resourceId") is not None:
-        request["resourceRef"] = {"provider": PROVIDER, "resourceId": input_["resourceId"]}
+        request["resourceRef"] = {
+            "connector": PROVIDER,
+            "provider": PROVIDER,
+            "resourceId": input_["resourceId"],
+            "resourceType": "document",
+        }
     return request
 
 
