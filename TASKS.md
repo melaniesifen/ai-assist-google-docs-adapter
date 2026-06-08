@@ -30,6 +30,14 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] M4-T3 / DOCS-002: verify fake-client `ACTIVE_RESOURCE` read context includes revision and content hash metadata.
 - [x] M4-T3 / DOCS-001 / DOCS-002: verify permission, quota/rate-limit, timeout, reconnect-required, and oversized-context failures.
 
+## Completed M7 Safe Apply
+
+- [x] M7-T2 / DOCS-003 / DOCS-004: verify fake-client replace behavior gated by resource revision, target range, original-text hash, and resource identity validation.
+- [x] M7-T2 / DOCS-004: verify fake-client insert behavior gated by resource revision and target anchor validation.
+- [x] M7-T2 / ACTION-004: return metadata-only conflict results for stale revision, missing target, hash mismatch, wrong resource, and unresolved provider indexes before mutation.
+- [x] M7-T2 / DOCS-005: verify permission, timeout, quota/rate-limit, reconnect-required, and provider failure mappings for apply dependencies and mutation writes.
+- [x] M7-T2 / OPS-003: verify apply token handoff and apply results exclude action payload plaintext, raw document text, replacement text, OAuth tokens, and authorization headers.
+
 ## Pending Architecture Tasks
 
 - [ ] REPO-001: decide final language/runtime, framework, package manager, package layout, migration cost, deployment target, and test strategy for this repo.

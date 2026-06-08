@@ -510,42 +510,113 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_apply_replace_insert_rejects_stale_target_before_provider_mutation(self):
         adapter, calls = adapter_with({"revisionId": "rev-2", "text": "Hello world"})
 
-        self.assert_adapter_error(
-            lambda: adapter.apply_replace_insert(
-                {
-                    **IDENTITY,
-                    "resourceId": "doc-1",
-                    "mutationType": MUTATION_TYPE_REPLACE_TEXT,
-                    "expectedRevision": "rev-1",
-                    "targetRange": {"startIndex": 6, "endIndex": 11},
-                    "originalTextHash": hash_content("world"),
-                    "text": "there",
-                    "idempotencyKey": "idem-1",
-                }
-            ),
-            code=ERROR_CODES["RESOURCE_STALE"],
-            http_status=409,
+        result = adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_REPLACE_TEXT,
+                "expectedRevision": "rev-1",
+                "targetRange": {"startIndex": 6, "endIndex": 11},
+                "originalTextHash": hash_content("world"),
+                "text": "there",
+                "idempotencyKey": "idem-1",
+            }
         )
+
+        self.assertEqual(result["status"], "CONFLICTED")
+        self.assertEqual(result["conflictDetails"]["code"], ERROR_CODES["RESOURCE_STALE"])
         self.assertEqual(calls["mutations"], [])
 
     def test_apply_replace_insert_rejects_original_text_conflict_before_provider_mutation(self):
         adapter, calls = adapter_with({"revisionId": "rev-1", "text": "Hello friend"})
 
-        self.assert_adapter_error(
-            lambda: adapter.apply_replace_insert(
-                {
-                    **IDENTITY,
-                    "resourceId": "doc-1",
-                    "mutationType": MUTATION_TYPE_REPLACE_TEXT,
-                    "expectedRevision": "rev-1",
-                    "targetRange": {"startIndex": 6, "endIndex": 12},
-                    "originalTextHash": hash_content("world!"),
-                    "text": "there",
-                    "idempotencyKey": "idem-1",
-                }
-            ),
-            code=ERROR_CODES["TARGET_CONFLICT"],
-            http_status=409,
+        result = adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_REPLACE_TEXT,
+                "expectedRevision": "rev-1",
+                "targetRange": {"startIndex": 6, "endIndex": 12},
+                "originalTextHash": hash_content("world!"),
+                "text": "there",
+                "idempotencyKey": "idem-1",
+            }
+        )
+
+        self.assertEqual(result["status"], "CONFLICTED")
+        self.assertEqual(result["conflictDetails"]["code"], ERROR_CODES["TARGET_CONFLICT"])
+        self.assertEqual(result["conflictDetails"]["reason"], "ORIGINAL_TEXT_HASH_MISMATCH")
+        self.assertEqual(calls["mutations"], [])
+
+    def test_apply_replace_insert_rejects_wrong_resource_before_provider_mutation(self):
+        adapter, calls = adapter_with({"documentId": "doc-2", "revisionId": "rev-1", "text": "Hello world"})
+
+        result = adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_REPLACE_TEXT,
+                "expectedRevision": "rev-1",
+                "targetRange": {"startIndex": 6, "endIndex": 11},
+                "originalTextHash": hash_content("world"),
+                "text": "there",
+                "idempotencyKey": "idem-wrong-resource",
+            }
+        )
+
+        self.assertEqual(result["status"], "CONFLICTED")
+        self.assertEqual(
+            result["conflictDetails"],
+            {
+                "code": ERROR_CODES["TARGET_CONFLICT"],
+                "reason": "RESOURCE_MISMATCH",
+                "expectedResourceId": "doc-1",
+                "currentResourceId": "doc-2",
+            },
+        )
+        self.assertEqual(calls["mutations"], [])
+
+    def test_apply_replace_insert_returns_conflict_for_missing_replace_target_before_provider_mutation(self):
+        adapter, calls = adapter_with({"revisionId": "rev-1", "text": "Hello world"})
+
+        result = adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_REPLACE_TEXT,
+                "expectedRevision": "rev-1",
+                "originalTextHash": hash_content("world"),
+                "text": "there",
+                "idempotencyKey": "idem-missing-range",
+            }
+        )
+
+        self.assertEqual(result["status"], "CONFLICTED")
+        self.assertEqual(
+            result["conflictDetails"],
+            {"code": ERROR_CODES["TARGET_CONFLICT"], "reason": "TARGET_RANGE_MISSING"},
+        )
+        self.assertEqual(calls["mutations"], [])
+
+    def test_apply_replace_insert_returns_conflict_for_missing_original_hash_before_provider_mutation(self):
+        adapter, calls = adapter_with({"revisionId": "rev-1", "text": "Hello world"})
+
+        result = adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_REPLACE_TEXT,
+                "expectedRevision": "rev-1",
+                "targetRange": {"startIndex": 6, "endIndex": 11},
+                "text": "there",
+                "idempotencyKey": "idem-missing-hash",
+            }
+        )
+
+        self.assertEqual(result["status"], "CONFLICTED")
+        self.assertEqual(
+            result["conflictDetails"],
+            {"code": ERROR_CODES["TARGET_CONFLICT"], "reason": "ORIGINAL_TEXT_HASH_MISSING"},
         )
         self.assertEqual(calls["mutations"], [])
 
@@ -591,6 +662,27 @@ class GoogleDocsAdapterTests(unittest.TestCase):
         self.assertEqual(len(calls["mutations"]), 1)
         self.assertEqual(calls["mutations"][0]["targetAnchor"], {"index": 5})
 
+    def test_apply_replace_insert_returns_conflict_for_missing_insert_anchor_before_provider_mutation(self):
+        adapter, calls = adapter_with({"revisionId": "rev-1", "text": "Hello world"})
+
+        result = adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_INSERT_TEXT,
+                "expectedRevision": "rev-1",
+                "text": "!",
+                "idempotencyKey": "idem-missing-anchor",
+            }
+        )
+
+        self.assertEqual(result["status"], "CONFLICTED")
+        self.assertEqual(
+            result["conflictDetails"],
+            {"code": ERROR_CODES["TARGET_CONFLICT"], "reason": "TARGET_ANCHOR_MISSING"},
+        )
+        self.assertEqual(calls["mutations"], [])
+
     def test_apply_replace_insert_preserves_provider_anchor_after_non_bmp_character(self):
         adapter, calls = adapter_with({"revisionId": "rev-1", "text": "A😀B"})
 
@@ -611,22 +703,23 @@ class GoogleDocsAdapterTests(unittest.TestCase):
     def test_apply_replace_insert_rejects_insert_anchors_inside_non_bmp_character(self):
         adapter, calls = adapter_with({"revisionId": "rev-1", "text": "A😀B"})
 
-        self.assert_adapter_error(
-            lambda: adapter.apply_replace_insert(
-                {
-                    **IDENTITY,
-                    "resourceId": "doc-1",
-                    "mutationType": MUTATION_TYPE_INSERT_TEXT,
-                    "expectedRevision": "rev-1",
-                    "targetAnchor": {"index": 2},
-                    "text": "!",
-                    "idempotencyKey": "idem-bisect",
-                }
-            ),
-            code=ERROR_CODES["TARGET_CONFLICT"],
-            http_status=409,
-            details={"reason": "TARGET_ANCHOR_UNRESOLVED"},
+        result = adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_INSERT_TEXT,
+                "expectedRevision": "rev-1",
+                "targetAnchor": {"index": 2},
+                "text": "!",
+                "idempotencyKey": "idem-bisect",
+            }
         )
+
+        self.assertEqual(result["status"], "CONFLICTED")
+        self.assertEqual(result["conflictDetails"], {
+            "code": ERROR_CODES["TARGET_CONFLICT"],
+            "reason": "TARGET_ANCHOR_UNRESOLVED",
+        })
         self.assertEqual(calls["mutations"], [])
 
     def test_apply_replace_insert_rejects_unsupported_mutation_types_before_provider_mutation(self):
@@ -669,6 +762,70 @@ class GoogleDocsAdapterTests(unittest.TestCase):
         )
         self.assertEqual(calls["tokens"], [])
         self.assertEqual(calls["get"], [])
+
+    def test_apply_result_is_metadata_only_even_if_provider_returns_payload_text(self):
+        class TokenProvider:
+            def get_access_token(self, input_):
+                return token_response(scopes=input_["requiredScopes"])
+
+        class GoogleClient:
+            def get_document(self, input_):
+                return {"documentId": "doc-1", "revisionId": "rev-1", "text": "Hello world"}
+
+            def apply_text_mutation(self, input_):
+                return {
+                    "providerOperationId": "op-plaintext",
+                    "resourceRevision": "rev-2",
+                    "text": input_["text"],
+                    "documentText": "Hello there",
+                    "replacementText": input_["text"],
+                    "authorization": "Bearer token-1",
+                }
+
+        adapter = GoogleDocsAdapter(
+            google_client=GoogleClient(),
+            token_provider=TokenProvider(),
+            clock=lambda: NOW,
+        )
+
+        result = adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_REPLACE_TEXT,
+                "expectedRevision": "rev-1",
+                "targetRange": {"startIndex": 6, "endIndex": 11},
+                "originalTextHash": hash_content("world"),
+                "text": "there",
+                "idempotencyKey": "idem-metadata-only",
+            }
+        )
+
+        self.assertEqual(
+            result,
+            {"status": "APPLIED", "providerOperationId": "op-plaintext", "resourceRevision": "rev-2"},
+        )
+
+    def test_apply_token_handoff_does_not_receive_action_payload_plaintext(self):
+        adapter, calls = adapter_with({"documentId": "doc-1", "revisionId": "rev-1", "text": "Hello world"})
+
+        adapter.apply_replace_insert(
+            {
+                **IDENTITY,
+                "resourceId": "doc-1",
+                "mutationType": MUTATION_TYPE_REPLACE_TEXT,
+                "expectedRevision": "rev-1",
+                "targetRange": {"startIndex": 6, "endIndex": 11},
+                "originalTextHash": hash_content("world"),
+                "text": "there",
+                "idempotencyKey": "idem-token-privacy",
+            }
+        )
+
+        self.assertNotIn("text", calls["tokens"][0])
+        self.assertNotIn("targetRange", calls["tokens"][0])
+        self.assertNotIn("originalTextHash", calls["tokens"][0])
+        self.assertNotIn("actionPayload", calls["tokens"][0])
 
     def test_google_provider_errors_are_normalized(self):
         class TokenProvider:

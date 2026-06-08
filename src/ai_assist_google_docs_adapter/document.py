@@ -52,6 +52,15 @@ def document_revision(document: dict[str, Any]) -> str:
     return revision
 
 
+def document_resource_id(document: dict[str, Any]) -> str | None:
+    assert_plain_object(document, "document")
+    resource_id = document.get("resourceId") or document.get("documentId") or document.get("id")
+    if resource_id is None:
+        return None
+    assert_non_empty_string(resource_id, "document.resourceId")
+    return resource_id
+
+
 def document_text(document: dict[str, Any]) -> str:
     assert_plain_object(document, "document")
     text = document.get("text")
@@ -186,6 +195,20 @@ def verify_replace_target(
     original_text_hash: str,
 ) -> dict[str, Any]:
     _assert_revision(current_revision, expected_revision)
+    if target_range is None:
+        raise adapter_error(
+            TARGET_CONFLICT,
+            "target range is required for replace mutation",
+            http_status=409,
+            details={"reason": "TARGET_RANGE_MISSING"},
+        )
+    if original_text_hash is None:
+        raise adapter_error(
+            TARGET_CONFLICT,
+            "original text hash is required for replace mutation",
+            http_status=409,
+            details={"reason": "ORIGINAL_TEXT_HASH_MISSING"},
+        )
     range_ = normalize_range(target_range)
     assert_non_empty_string(original_text_hash, "originalTextHash")
     current_text = provider_indexed_slice(
@@ -213,6 +236,13 @@ def verify_insert_target(
     target_anchor: dict[str, Any],
 ) -> dict[str, Any]:
     _assert_revision(current_revision, expected_revision)
+    if target_anchor is None:
+        raise adapter_error(
+            TARGET_CONFLICT,
+            "target anchor is required for insert mutation",
+            http_status=409,
+            details={"reason": "TARGET_ANCHOR_MISSING"},
+        )
     anchor = normalize_anchor(target_anchor)
     provider_index_to_py_offset(text, anchor["index"], unresolved_reason="TARGET_ANCHOR_UNRESOLVED")
     return {"targetAnchor": anchor}
@@ -268,6 +298,23 @@ def _assert_revision(current_revision: str, expected_revision: str) -> None:
             "document revision is stale",
             http_status=409,
             details={"expectedRevision": expected_revision, "currentRevision": current_revision},
+        )
+
+
+def assert_document_resource(document: dict[str, Any], expected_resource_id: str) -> None:
+    actual_resource_id = document_resource_id(document)
+    if actual_resource_id is None:
+        return
+    if actual_resource_id != expected_resource_id:
+        raise adapter_error(
+            TARGET_CONFLICT,
+            "document resource does not match requested resource",
+            http_status=409,
+            details={
+                "reason": "RESOURCE_MISMATCH",
+                "expectedResourceId": expected_resource_id,
+                "currentResourceId": actual_resource_id,
+            },
         )
 
 

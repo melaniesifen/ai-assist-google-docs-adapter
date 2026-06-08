@@ -24,6 +24,7 @@ from .constants import (
     READ_CONTEXT_REQUIRED_SCOPES,
 )
 from .document import (
+    assert_document_resource,
     document_revision,
     document_text,
     normalize_read_context,
@@ -38,6 +39,7 @@ from .errors import (
     PERMISSION_DENIED,
     PROVIDER_ERROR,
     PROVIDER_TIMEOUT,
+    RESOURCE_STALE,
     TARGET_CONFLICT,
     TOKEN_RECONNECT_REQUIRED,
     TOKEN_UNAVAILABLE,
@@ -191,6 +193,7 @@ class GoogleDocsAdapter:
             )
             return verify_mutation_target(
                 document=document,
+                resource_id=input_["resourceId"],
                 mutation_type=input_["mutationType"],
                 expected_revision=input_["expectedRevision"],
                 target_range=input_.get("targetRange"),
@@ -223,14 +226,21 @@ class GoogleDocsAdapter:
                     {"accessToken": access_token, "documentId": input_["resourceId"]},
                 ),
             )
-            verification = verify_mutation_target(
-                document=document,
-                mutation_type=input_["mutationType"],
-                expected_revision=input_["expectedRevision"],
-                target_range=input_.get("targetRange"),
-                target_anchor=input_.get("targetAnchor"),
-                original_text_hash=input_.get("originalTextHash"),
-            )
+            try:
+                verification = verify_mutation_target(
+                    document=document,
+                    resource_id=input_["resourceId"],
+                    mutation_type=input_["mutationType"],
+                    expected_revision=input_["expectedRevision"],
+                    target_range=input_.get("targetRange"),
+                    target_anchor=input_.get("targetAnchor"),
+                    original_text_hash=input_.get("originalTextHash"),
+                )
+            except BaseException as error:
+                normalized = normalize_google_error(error, "applyReplaceInsert.verify")
+                if normalized.code in {RESOURCE_STALE, TARGET_CONFLICT}:
+                    return _conflict_result(normalized)
+                raise normalized from error
             mutation_request = build_mutation_request(
                 access_token=access_token,
                 document_id=input_["resourceId"],
@@ -331,12 +341,15 @@ def verify_mutation_target(
     document: dict[str, Any],
     mutation_type: str,
     expected_revision: str,
+    resource_id: str | None = None,
     target_range: dict[str, Any] | None = None,
     target_anchor: dict[str, Any] | None = None,
     original_text_hash: str | None = None,
 ) -> dict[str, Any]:
     text = document_text(document)
     current_revision = document_revision(document)
+    if resource_id is not None:
+        assert_document_resource(document, resource_id)
 
     if mutation_type == MUTATION_TYPE_REPLACE_TEXT:
         return {
@@ -367,6 +380,16 @@ def verify_mutation_target(
         http_status=422,
         details={"mutationType": mutation_type, "supportedMutationTypes": list(MUTATION_TYPES)},
     )
+
+
+def _conflict_result(error: Any) -> dict[str, Any]:
+    return {
+        "status": "CONFLICTED",
+        "conflictDetails": {
+            "code": error.code,
+            **error.details,
+        },
+    }
 
 
 def build_mutation_request(
