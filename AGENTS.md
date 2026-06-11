@@ -20,6 +20,10 @@
 - Run Python compile checks with `PYTHONPATH=src python3 -m compileall src tests`.
 - The current package uses only the Python standard library. Do not add third-party dependencies without repo-local manifests and documented install/test commands.
 
+## Test Layout
+
+- Keep tests split by source responsibility where practical, and put reused fake clients, constants, fixtures, and adapter assertions in `tests/common.py`.
+
 ## Review Notes
 
 Before committing, review for unsafe retries, duplicate mutations, token/document text leakage, and whether conflicts stop before provider mutation.
