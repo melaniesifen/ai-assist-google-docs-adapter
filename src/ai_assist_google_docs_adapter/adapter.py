@@ -226,14 +226,20 @@ class GoogleDocsAdapter:
             required_scopes=MUTATE_DOCUMENT_REQUIRED_SCOPES,
         )
         try:
-            document = self._google_read(
-                "applyReplaceInsert.verify",
-                lambda: _call_method(
-                    self.google_client,
-                    "get_document",
-                    {"accessToken": access_token, "documentId": input_["resourceId"]},
-                ),
-            )
+            try:
+                document = self._google_read(
+                    "applyReplaceInsert.verify",
+                    lambda: _call_method(
+                        self.google_client,
+                        "get_document",
+                        {"accessToken": access_token, "documentId": input_["resourceId"]},
+                    ),
+                )
+            except BaseException as error:
+                normalized = normalize_google_error(error, "applyReplaceInsert.verify")
+                if normalized.code in {RESOURCE_STALE, TARGET_CONFLICT}:
+                    return _conflict_result(normalized)
+                raise normalized from error
             try:
                 verification = verify_mutation_target(
                     document=document,

@@ -46,6 +46,13 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] M8-T3 / DOCS-005: verify Google permission, quota/rate-limit, timeout, revoked OAuth, stale revision, missing target, and uncertain mutation mappings use typed safe errors.
 - [x] M8-T3 / OPS-003: verify read/apply results and adapter docs keep OAuth tokens, authorization headers, document text, selected text, replacement text, and action payload plaintext out of logs and metadata-only results.
 
+## Completed M9 Trusted-User MVP Hardening
+
+- [x] M9-T5 / DOCS-001: verify resource listing uses injected OAuth token access with the least-privilege Drive metadata scope.
+- [x] M9-T5 / DOCS-002: verify read context preserves revision metadata, connector-verified provenance, truncation metadata, and typed safe errors.
+- [x] M9-T5 / DOCS-003 / DOCS-004 / ACTION-004: verify safe apply keeps connector-verified revision, range/anchor, original-text hash, idempotency key, and no-mutation conflict behavior before writes.
+- [x] M9-T5 / DOCS-005: normalize real-client Google permission, quota, timeout, revoked OAuth, stale revision, missing target, and uncertain mutation errors to safe adapter errors.
+
 ## Pending Architecture Tasks
 
 - [ ] REPO-001: decide final language/runtime, framework, package manager, package layout, migration cost, deployment target, and test strategy for this repo.

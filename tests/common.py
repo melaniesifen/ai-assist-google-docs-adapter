@@ -21,12 +21,22 @@ ALL_SCOPES = [
 
 
 class StatusError(Exception):
-    def __init__(self, status=None, code=None, name=None):
+    def __init__(self, status=None, code=None, name=None, reason=None, content=None, error_details=None):
         super().__init__("provider error")
         self.status = status
         self.code = code
+        self.reason = reason
+        self.content = content
+        self.error_details = error_details
         if name is not None:
             self.name = name
+
+
+class ResponseStatusError(Exception):
+    def __init__(self, status, *, content=None):
+        super().__init__("provider response error")
+        self.resp = type("Response", (), {"status": status})()
+        self.content = content
 
 
 class FakeDependencies:
@@ -124,6 +134,7 @@ __all__ = [
     "NOW",
     "AdapterTestCase",
     "FakeDependencies",
+    "ResponseStatusError",
     "StatusError",
     "adapter_with",
     "token_response",
