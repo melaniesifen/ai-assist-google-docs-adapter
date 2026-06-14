@@ -38,6 +38,14 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] M7-T2 / DOCS-005: verify permission, timeout, quota/rate-limit, reconnect-required, and provider failure mappings for apply dependencies and mutation writes.
 - [x] M7-T2 / OPS-003: verify apply token handoff and apply results exclude action payload plaintext, raw document text, replacement text, OAuth tokens, and authorization headers.
 
+## Completed M8 Real Google Docs Read/Apply
+
+- [x] M8-T3 / DOCS-001: verify real Google Drive/Docs resource discovery behind injected token-provider and Google-client boundaries with metadata-only resource results.
+- [x] M8-T3 / DOCS-002: implement safe active-resource truncation metadata and verify selected-range reads retain revision and connector-verified anchors.
+- [x] M8-T3 / DOCS-003 / DOCS-004: verify real target verification and safe replace/insert keep revision, range/anchor, original-text hash, resource ID, permission, and no-mutation conflict guarantees at the connector boundary.
+- [x] M8-T3 / DOCS-005: verify Google permission, quota/rate-limit, timeout, revoked OAuth, stale revision, missing target, and uncertain mutation mappings use typed safe errors.
+- [x] M8-T3 / OPS-003: verify read/apply results and adapter docs keep OAuth tokens, authorization headers, document text, selected text, replacement text, and action payload plaintext out of logs and metadata-only results.
+
 ## Pending Architecture Tasks
 
 - [ ] REPO-001: decide final language/runtime, framework, package manager, package layout, migration cost, deployment target, and test strategy for this repo.
@@ -46,17 +54,17 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] AUTH-003: define exact least-privilege Google OAuth scopes for resource listing, context reads, and safe replace/insert.
 - [x] DOCS-001 / DOCS-002: define first production adapter request/response shapes for authorized resource discovery and read-context handoff using injected clients.
 - [ ] CTX-005: align connector interface inputs/outputs with shared contracts for verify target and apply safe mutation.
-- [ ] DOCS-001: add real Google Drive/Docs resource discovery adapter using authorized OAuth tokens and metadata-only responses.
+- [x] DOCS-001: add real Google Drive/Docs resource discovery adapter using authorized OAuth tokens and metadata-only responses.
 - [x] DOCS-001: add fake-client contract tests for permission, quota, revoked-token, timeout, and provider failure normalization.
 - [ ] DOCS-001 / E2E-001: add integration tests for authorized resource discovery with auth-service token handoff and metadata-only results.
-- [ ] DOCS-002: add real Google Docs read-context adapter for `SELECTION` and `ACTIVE_RESOURCE` with revision metadata and no document-text logs.
+- [x] DOCS-002: add real Google Docs read-context adapter for `SELECTION` and `ACTIVE_RESOURCE` with revision metadata and no document-text logs.
 - [ ] DOCS-002 / E2E-002: add integration tests for read-context handoff to context/orchestration using connector-verified normalized context.
-- [ ] DOCS-002: align oversized-content truncation or rejection with the context service policy once finalized.
-- [ ] DOCS-003: map Google-native revision/range/anchor semantics into connector-neutral verification results for orchestration.
-- [ ] DOCS-004: add real Google Docs safe replace/insert adapter with least-privilege scopes and updated revision metadata in successful results.
+- [x] DOCS-002: align oversized-content truncation or rejection with the context service policy once finalized.
+- [x] DOCS-003: map Google-native revision/range/anchor semantics into connector-neutral verification results for orchestration.
+- [x] DOCS-004: add real Google Docs safe replace/insert adapter with least-privilege scopes and updated revision metadata in successful results.
 - [ ] DOCS-004 / E2E-004: add integration tests for safe apply-action with revision/range/hash validation, idempotent duplicate handling, and conflict results.
 - [x] DOCS-005: document and implement bounded timeout/retry policy separately for read, verify, and mutate operations.
-- [ ] DOCS-005 / ACTION-006: add failure-mode validation for revoked OAuth, permission/quota errors, timeouts, stale documents, uncertain mutation results, and provider write failures.
+- [x] DOCS-005 / ACTION-006: add failure-mode validation for revoked OAuth, permission/quota errors, timeouts, stale documents, uncertain mutation results, and provider write failures.
 - [ ] ACTION-004: add internal service adapter and contract tests for idempotent apply-action handoff from orchestration.
 - [x] ACTION-005: keep unsupported edit types rejected with typed unsupported-action errors.
 - [x] OPS-003: add metadata-only logging adapter rules for future HTTP/internal adapters.

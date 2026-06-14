@@ -35,7 +35,6 @@ from .document import (
     verify_replace_target,
 )
 from .errors import (
-    CONTEXT_TOO_LARGE,
     PERMISSION_DENIED,
     PROVIDER_ERROR,
     PROVIDER_TIMEOUT,
@@ -138,9 +137,17 @@ class GoogleDocsAdapter:
                     "selectionAnchor": {"range": selected["range"]},
                     "targetRange": selected["range"],
                 }
+                content_limit_metadata = {
+                    "maxBytes": MAX_ACTIVE_RESOURCE_BYTES,
+                    "originalBytes": len(content.encode("utf-8")),
+                    "returnedBytes": len(content.encode("utf-8")),
+                    "truncated": False,
+                }
             else:
-                content = _bounded_active_resource_text(text)
+                bounded_content = _bounded_active_resource_text(text)
+                content = bounded_content["content"]
                 anchors = {}
+                content_limit_metadata = bounded_content["metadata"]
 
             context = normalize_read_context(
                 {
@@ -158,6 +165,7 @@ class GoogleDocsAdapter:
                         "documentTitle": document.get("title"),
                         "contentBytes": len(content.encode("utf-8")),
                         "modifiedTime": document.get("modifiedTime"),
+                        "contentLimit": content_limit_metadata,
                     },
                     "revisionMetadata": _read_revision_metadata(document, revision),
                 },
@@ -545,16 +553,36 @@ def _selected_text(text: str, range_: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _bounded_active_resource_text(text: str) -> str:
+def _bounded_active_resource_text(text: str) -> dict[str, Any]:
     content_bytes = len(text.encode("utf-8"))
-    if content_bytes > MAX_ACTIVE_RESOURCE_BYTES:
-        raise adapter_error(
-            CONTEXT_TOO_LARGE,
-            "active resource context exceeds maxBytes",
-            http_status=413,
-            details={"contentBytes": content_bytes, "maxBytes": MAX_ACTIVE_RESOURCE_BYTES},
-        )
-    return text
+    if content_bytes <= MAX_ACTIVE_RESOURCE_BYTES:
+        return {
+            "content": text,
+            "metadata": {
+                "maxBytes": MAX_ACTIVE_RESOURCE_BYTES,
+                "originalBytes": content_bytes,
+                "returnedBytes": content_bytes,
+                "truncated": False,
+            },
+        }
+    truncated = _truncate_utf8(text, MAX_ACTIVE_RESOURCE_BYTES)
+    return {
+        "content": truncated,
+        "metadata": {
+            "maxBytes": MAX_ACTIVE_RESOURCE_BYTES,
+            "originalBytes": content_bytes,
+            "returnedBytes": len(truncated.encode("utf-8")),
+            "truncated": True,
+            "truncationReason": "MAX_ACTIVE_RESOURCE_BYTES",
+        },
+    }
+
+
+def _truncate_utf8(text: str, max_bytes: int) -> str:
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    return encoded[:max_bytes].decode("utf-8", errors="ignore")
 
 
 def _read_revision_metadata(document: dict[str, Any], revision: str) -> dict[str, Any]:

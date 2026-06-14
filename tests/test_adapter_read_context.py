@@ -125,26 +125,10 @@ class GoogleDocsAdapterReadContextTests(AdapterTestCase):
             details={"reason": "SELECTION_RANGE_UNRESOLVED"},
         )
 
-    def test_read_context_rejects_oversized_active_resource_context(self):
+    def test_read_context_truncates_oversized_active_resource_context_safely(self):
         adapter, _ = adapter_with(
             {"revisionId": "rev-1", "text": "a" * (MAX_ACTIVE_RESOURCE_BYTES + 1), "title": "Doc"}
         )
-
-        self.assert_adapter_error(
-            lambda: adapter.read_context(
-                {
-                    **IDENTITY,
-                    "sessionId": "session-1",
-                    "resourceId": "doc-1",
-                    "contextMode": CONTEXT_MODE_ACTIVE_RESOURCE,
-                }
-            ),
-            code=ERROR_CODES["CONTEXT_TOO_LARGE"],
-            http_status=413,
-        )
-
-    def test_read_context_accepts_active_resource_context_at_the_byte_limit(self):
-        adapter, _ = adapter_with({"revisionId": "rev-1", "text": "a" * MAX_ACTIVE_RESOURCE_BYTES, "title": "Doc"})
 
         result = adapter.read_context(
             {
@@ -157,4 +141,64 @@ class GoogleDocsAdapterReadContextTests(AdapterTestCase):
         context = result["context"]
 
         self.assertEqual(len(context["content"]), MAX_ACTIVE_RESOURCE_BYTES)
+        self.assertEqual(
+            context["metadata"]["contentLimit"],
+            {
+                "maxBytes": MAX_ACTIVE_RESOURCE_BYTES,
+                "originalBytes": MAX_ACTIVE_RESOURCE_BYTES + 1,
+                "returnedBytes": MAX_ACTIVE_RESOURCE_BYTES,
+                "truncated": True,
+                "truncationReason": "MAX_ACTIVE_RESOURCE_BYTES",
+            },
+        )
 
+    def test_read_context_accepts_active_resource_context_at_the_byte_limit(self):
+        adapter, _ = adapter_with(
+            {"revisionId": "rev-1", "text": "a" * MAX_ACTIVE_RESOURCE_BYTES, "title": "Doc"}
+        )
+
+        result = adapter.read_context(
+            {
+                **IDENTITY,
+                "sessionId": "session-1",
+                "resourceId": "doc-1",
+                "contextMode": CONTEXT_MODE_ACTIVE_RESOURCE,
+            }
+        )
+        context = result["context"]
+
+        self.assertEqual(len(context["content"]), MAX_ACTIVE_RESOURCE_BYTES)
+        self.assertEqual(
+            context["metadata"]["contentLimit"],
+            {
+                "maxBytes": MAX_ACTIVE_RESOURCE_BYTES,
+                "originalBytes": MAX_ACTIVE_RESOURCE_BYTES,
+                "returnedBytes": MAX_ACTIVE_RESOURCE_BYTES,
+                "truncated": False,
+            },
+        )
+
+    def test_read_context_truncates_without_splitting_utf8_characters(self):
+        adapter, _ = adapter_with(
+            {
+                "revisionId": "rev-1",
+                "text": "a" * (MAX_ACTIVE_RESOURCE_BYTES - 1) + "é",
+                "title": "Doc",
+            }
+        )
+
+        result = adapter.read_context(
+            {
+                **IDENTITY,
+                "sessionId": "session-1",
+                "resourceId": "doc-1",
+                "contextMode": CONTEXT_MODE_ACTIVE_RESOURCE,
+            }
+        )
+        context = result["context"]
+
+        self.assertEqual(context["content"], "a" * (MAX_ACTIVE_RESOURCE_BYTES - 1))
+        self.assertEqual(
+            context["metadata"]["contentLimit"]["returnedBytes"],
+            MAX_ACTIVE_RESOURCE_BYTES - 1,
+        )

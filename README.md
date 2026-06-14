@@ -9,7 +9,8 @@ This package owns Google Docs connector domain behavior:
 - List Google Docs resources through an injected Google client.
 - Obtain OAuth access through an injected token provider.
 - Read active-resource or selected-range context.
-- Reject active-resource context above 64 KiB until orchestration defines windowing or excerpt policy.
+- Safely truncate active-resource context above 64 KiB with metadata about the
+  original and returned byte counts.
 - Return connector-verified normalized context with resource revision, anchors, content hash, and provenance.
 - Verify replace targets by resource revision, range resolution, and original text hash.
 - Verify insert targets by resource revision and anchor resolution.
