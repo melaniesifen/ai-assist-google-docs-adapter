@@ -65,6 +65,18 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] M10-T3 / DOCS-001 / AUTH-003: pass optional `googleAccountId` through the resource-list HTTP adapter into the token handoff request so the deployed dogfood runtime can select a connected Google account without exposing OAuth token material.
 - [x] M10-T6 / DOCS-003 / DOCS-004 / ACTION-004: verify orchestration safe apply requires connector-verified target metadata, passes revision/range/hash/type/idempotency metadata into mutation requests, and returns metadata-only no-mutation results for stale, conflicting, unsupported, token, and permission failures.
 
+## Milestone 11 Real User Isolation
+
+- [ ] M11-T2: Add user A/user B token-handoff tests proving resource listing
+  and read-context use only the authenticated user's Google OAuth token metadata
+  and fail before Google calls for wrong-user or missing token handoffs.
+- [ ] M11-T3: Ensure Google Docs `ACTIVE_RESOURCE` read and apply paths depend
+  on persisted `ContextConsentGrants` loaded for the derived tenant/user and
+  named resource, not static dogfood consent JSON.
+- [ ] M11-T5: Add deterministic cross-user read/apply denial coverage proving
+  user B cannot read, validate, or mutate user A's controlled Google Doc through
+  user A's OAuth token, consent grant, proposed action, or session state.
+
 ## Pending Architecture Tasks
 
 - [ ] REPO-001: decide final language/runtime, framework, package manager, package layout, migration cost, deployment target, and test strategy for this repo.
