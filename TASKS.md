@@ -59,6 +59,10 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] M9-T9.7 / DOCS-002: verify the real-client document read path extracts Google Docs text and preserves document ID, title, and revision metadata without logging document content.
 - [x] M9-T9.7 / DOCS-004 / ACTION-004: add an orchestration-facing connector adapter for validate/apply handoff with connector-verified target metadata, idempotency-key propagation, no-mutation conflicts, and metadata-only apply results.
 
+## Completed M10 Dogfood Runtime Handler
+
+- [x] M10 dogfood / DOCS-001: expose package-level `http_app.handle_http_request` for `GET /resources` with safe auth validation, metadata-only resource results through the existing adapter boundary when injected/configured, no-store responses, and structured dependency/config errors when deployed Google token handoff is unavailable.
+
 ## Pending Architecture Tasks
 
 - [ ] REPO-001: decide final language/runtime, framework, package manager, package layout, migration cost, deployment target, and test strategy for this repo.
