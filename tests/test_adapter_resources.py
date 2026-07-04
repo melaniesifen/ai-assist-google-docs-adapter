@@ -62,6 +62,21 @@ class GoogleDocsAdapterResourceTests(AdapterTestCase):
             },
         )
 
+    def test_list_resources_token_handoff_includes_google_account_id(self):
+        adapter, calls = adapter_with()
+
+        adapter.list_resources(
+            {
+                **IDENTITY,
+                "requestId": "req-1",
+                "googleAccountId": "account-1",
+            }
+        )
+
+        self.assertEqual(calls["tokens"][0]["operation"], "listResources")
+        self.assertEqual(calls["tokens"][0]["googleAccountId"], "account-1")
+        self.assertEqual(calls["tokens"][0]["requiredScopes"], [GOOGLE_OAUTH_SCOPE_DRIVE_METADATA_READONLY])
+
     def test_list_resources_permission_errors_map_to_permission_denied(self):
         class TokenProvider:
             def get_access_token(self, input_):
@@ -194,4 +209,3 @@ class GoogleDocsAdapterResourceTests(AdapterTestCase):
             },
         )
         self.assertEqual(calls["list"], [])
-

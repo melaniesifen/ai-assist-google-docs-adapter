@@ -465,6 +465,7 @@ def _token_handoff_request(
         "resourceId",
         "contextMode",
         "consentGrantId",
+        "googleAccountId",
     ):
         if input_.get(field_name) is not None:
             request[field_name] = input_[field_name]

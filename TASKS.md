@@ -62,6 +62,7 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 ## Completed M10 Dogfood Runtime Handler
 
 - [x] M10 dogfood / DOCS-001: expose package-level `http_app.handle_http_request` for `GET /resources` with safe auth validation, metadata-only resource results through the existing adapter boundary when injected/configured, no-store responses, and structured dependency/config errors when deployed Google token handoff is unavailable.
+- [x] M10-T3 / DOCS-001 / AUTH-003: pass optional `googleAccountId` through the resource-list HTTP adapter into the token handoff request so the deployed dogfood runtime can select a connected Google account without exposing OAuth token material.
 
 ## Pending Architecture Tasks
 

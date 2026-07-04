@@ -78,6 +78,7 @@ class GoogleDocsHttpApplication:
                 result = self.adapter.list_resources(
                     {
                         **identity,
+                        "googleAccountId": _first(query, "googleAccountId"),
                         "pageSize": _optional_int(_first(query, "pageSize")),
                         "pageToken": _first(query, "pageToken"),
                         "requestId": _header(headers, "x-request-id"),

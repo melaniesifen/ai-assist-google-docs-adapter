@@ -29,7 +29,22 @@ class GoogleDocsHttpAppTests(unittest.TestCase):
         self.assertEqual(payload["resources"][0]["resourceId"], "doc-1")
         self.assertEqual(adapter.requests[0]["tenantId"], "tenant-1")
         self.assertEqual(adapter.requests[0]["pageSize"], 10)
+        self.assertIsNone(adapter.requests[0]["googleAccountId"])
         self.assertNotIn("content", json.dumps(payload))
+
+    def test_resources_passes_optional_google_account_id_to_token_handoff(self):
+        adapter = FakeAdapter()
+        app = GoogleDocsHttpApplication(adapter=adapter)
+
+        response = app.handle(
+            method="GET",
+            path="/resources",
+            headers=AUTH_HEADERS,
+            query={"googleAccountId": ["account-1"]},
+        )
+
+        self.assertEqual(response["status"], 200)
+        self.assertEqual(adapter.requests[0]["googleAccountId"], "account-1")
 
     def test_missing_auth_returns_401(self):
         response = handle_http_request(method="GET", path="/resources", headers={})
