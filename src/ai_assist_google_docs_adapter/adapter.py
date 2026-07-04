@@ -423,6 +423,7 @@ def build_mutation_request(
         "text": text,
         "idempotencyKey": idempotency_key,
         "expectedRevision": verification.get("resourceRevision"),
+        "originalTextHash": verification.get("currentHash"),
     }
     if mutation_type == MUTATION_TYPE_REPLACE_TEXT:
         return {**base, "targetRange": verification.get("targetRange")}
