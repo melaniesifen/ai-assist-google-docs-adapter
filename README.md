@@ -17,7 +17,7 @@ This package owns Google Docs connector domain behavior:
 - Apply only MVP-safe `REPLACE_TEXT` and `INSERT_TEXT` mutations.
 - Return typed normalized errors for validation, stale resources, conflicts, permission failures, rate limits, and provider failures.
 
-This package intentionally has no Google SDK dependency and no third-party Python dependency. Production HTTP/API adapters should inject a Google client implementation and a token provider backed by the auth service token boundary.
+This package intentionally has no Google SDK dependency and no third-party Python dependency. Production HTTP/API adapters can inject the included stdlib `GoogleDriveDocsHttpClient` for real Google Drive/Docs API calls and a token provider backed by the auth service token boundary.
 
 ## Auth Token Handoff
 
@@ -36,6 +36,22 @@ Least-privilege Google OAuth scope constants are exported by the package:
 - Safe replace/insert mutation: `https://www.googleapis.com/auth/documents`
 
 Google client implementations receive only the access token plus operation-specific request metadata. They must not log OAuth tokens, authorization headers, document text, selected text, or mutation payload text.
+
+## Real Google Client
+
+`GoogleDriveDocsHttpClient` implements the injected Google client interface with
+stdlib HTTP calls:
+
+- `list_documents` calls Google Drive `files.list` for Google Docs metadata.
+- `get_document` calls Google Docs `documents.get` and extracts document text
+  from structural elements while preserving document ID, title, and revision.
+- `apply_text_mutation` calls Google Docs `documents.batchUpdate` with
+  `writeControl.requiredRevisionId` and only emits safe replace/insert request
+  bodies after the adapter has verified the target.
+
+The client takes only per-call access tokens from the adapter. It returns
+metadata-only apply results and maps HTTP status/reason details into exceptions
+that the adapter normalizes to safe typed errors.
 
 ## Connector Contract Shapes
 
@@ -78,16 +94,32 @@ This package does not create logs. Future HTTP, queue, or internal-service wrapp
 
 Wrappers must not log OAuth tokens, authorization headers, document text, selected text, replacement or insertion text, decrypted action payloads, prompts, model responses, or raw Google provider payloads.
 
+## Orchestration Connector
+
+`GoogleDocsOrchestrationConnector` adapts orchestration action records to the
+lower-level Google Docs methods:
+
+- `validate_target(action)` returns `{valid, verifiedTarget}` or metadata-only
+  conflict details without mutating the provider.
+- `apply_action({action, verifiedTarget, payload, idempotencyKey})` maps
+  approved action payloads into safe replace/insert calls and returns only
+  provider operation/revision metadata.
+
+Action-level idempotency and same-key replay remain owned by orchestration's
+action store. The connector preserves the idempotency key in the provider
+request and does not retry mutation writes.
+
 ## Future API Adapters
 
-HTTP or queue adapters should wrap this domain layer later. Those adapters should:
+HTTP or queue adapters should wrap this domain layer. Those adapters should:
 
 - Derive `tenantId` and `userId` from authenticated server-side identity.
 - Retrieve OAuth tokens only through the auth/token boundary.
 - Map `GoogleDocsAdapterError` to the shared platform error envelope.
 - Preserve idempotency keys across apply requests.
 - Keep document text, OAuth tokens, and authorization headers out of logs.
-- Add real Google Docs and Drive API implementations behind the injected `googleClient` interface.
+- Inject `GoogleDriveDocsHttpClient` or another implementation behind the
+  `googleClient` interface.
 
 ## Task Breakdown
 

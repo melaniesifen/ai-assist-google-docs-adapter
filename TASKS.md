@@ -53,6 +53,12 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] M9-T5 / DOCS-003 / DOCS-004 / ACTION-004: verify safe apply keeps connector-verified revision, range/anchor, original-text hash, idempotency key, and no-mutation conflict behavior before writes.
 - [x] M9-T5 / DOCS-005: normalize real-client Google permission, quota, timeout, revoked OAuth, stale revision, missing target, and uncertain mutation errors to safe adapter errors.
 
+## Completed M9 Deployed Dev Gap Close
+
+- [x] M9-T9.7 / DOCS-001: add a stdlib Google Drive/Docs HTTP client for deployed resource listing, document reads, and safe batchUpdate replace/insert calls behind the injected client boundary.
+- [x] M9-T9.7 / DOCS-002: verify the real-client document read path extracts Google Docs text and preserves document ID, title, and revision metadata without logging document content.
+- [x] M9-T9.7 / DOCS-004 / ACTION-004: add an orchestration-facing connector adapter for validate/apply handoff with connector-verified target metadata, idempotency-key propagation, no-mutation conflicts, and metadata-only apply results.
+
 ## Pending Architecture Tasks
 
 - [ ] REPO-001: decide final language/runtime, framework, package manager, package layout, migration cost, deployment target, and test strategy for this repo.
@@ -60,7 +66,7 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [x] AUTH-003: integrate token access with the auth service boundary, including revoked/expired Google token reconnect-required errors.
 - [x] AUTH-003: define exact least-privilege Google OAuth scopes for resource listing, context reads, and safe replace/insert.
 - [x] DOCS-001 / DOCS-002: define first production adapter request/response shapes for authorized resource discovery and read-context handoff using injected clients.
-- [ ] CTX-005: align connector interface inputs/outputs with shared contracts for verify target and apply safe mutation.
+- [x] CTX-005: align connector interface inputs/outputs with shared contracts for verify target and apply safe mutation.
 - [x] DOCS-001: add real Google Drive/Docs resource discovery adapter using authorized OAuth tokens and metadata-only responses.
 - [x] DOCS-001: add fake-client contract tests for permission, quota, revoked-token, timeout, and provider failure normalization.
 - [ ] DOCS-001 / E2E-001: add integration tests for authorized resource discovery with auth-service token handoff and metadata-only results.
@@ -72,7 +78,7 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [ ] DOCS-004 / E2E-004: add integration tests for safe apply-action with revision/range/hash validation, idempotent duplicate handling, and conflict results.
 - [x] DOCS-005: document and implement bounded timeout/retry policy separately for read, verify, and mutate operations.
 - [x] DOCS-005 / ACTION-006: add failure-mode validation for revoked OAuth, permission/quota errors, timeouts, stale documents, uncertain mutation results, and provider write failures.
-- [ ] ACTION-004: add internal service adapter and contract tests for idempotent apply-action handoff from orchestration.
+- [x] ACTION-004: add internal service adapter and contract tests for idempotent apply-action handoff from orchestration.
 - [x] ACTION-005: keep unsupported edit types rejected with typed unsupported-action errors.
 - [x] OPS-003: add metadata-only logging adapter rules for future HTTP/internal adapters.
 - [ ] OPS-004 / INFRA-004: add deployment pipeline checks for Google OAuth config, least-privilege scopes, metadata-only logs, metrics, and adapter dependency health.

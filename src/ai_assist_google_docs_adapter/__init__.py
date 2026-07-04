@@ -1,4 +1,6 @@
 from .adapter import GoogleDocsAdapter, build_mutation_request, verify_mutation_target
+from .google_http_client import GoogleDriveDocsHttpClient, GoogleHttpClientError
+from .orchestration_connector import GoogleDocsOrchestrationConnector
 from .constants import (
     CONTEXT_MODE_ACTIVE_RESOURCE,
     CONTEXT_MODE_SELECTION,
@@ -31,6 +33,9 @@ __all__ = [
     "ERROR_CODES",
     "GoogleDocsAdapter",
     "GoogleDocsAdapterError",
+    "GoogleDocsOrchestrationConnector",
+    "GoogleDriveDocsHttpClient",
+    "GoogleHttpClientError",
     "GOOGLE_OAUTH_SCOPE_DOCUMENTS",
     "GOOGLE_OAUTH_SCOPE_DOCUMENTS_READONLY",
     "GOOGLE_OAUTH_SCOPE_DRIVE_METADATA_READONLY",
