@@ -70,7 +70,7 @@ Migration status: The repo has been migrated from the temporary JavaScript ESM b
 - [ ] M11-T2: Add user A/user B token-handoff tests proving resource listing
   and read-context use only the authenticated user's Google OAuth token metadata
   and fail before Google calls for wrong-user or missing token handoffs.
-- [ ] M11-T3: Ensure Google Docs `ACTIVE_RESOURCE` read and apply paths depend
+- [x] M11-T3: Ensure Google Docs `ACTIVE_RESOURCE` read and apply paths depend
   on persisted `ContextConsentGrants` loaded for the derived tenant/user and
   named resource, not static dogfood consent JSON.
 - [ ] M11-T5: Add deterministic cross-user read/apply denial coverage proving
