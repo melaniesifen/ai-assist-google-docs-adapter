@@ -113,6 +113,32 @@ class GoogleDocsAdapterTokenHandoffTests(AdapterTestCase):
             },
         )
 
+    def test_full_documents_scope_satisfies_readonly_context_handoff(self):
+        class TokenProvider:
+            def get_access_token(self, input_):
+                return token_response(scopes=[GOOGLE_OAUTH_SCOPE_DOCUMENTS])
+
+        class GoogleClient:
+            def get_document(self, input_):
+                return {"documentId": input_["documentId"], "revisionId": "rev-1", "text": "Alpha beta"}
+
+        adapter = GoogleDocsAdapter(
+            google_client=GoogleClient(),
+            token_provider=TokenProvider(),
+            clock=lambda: NOW,
+        )
+
+        result = adapter.read_context(
+            {
+                **IDENTITY,
+                "sessionId": "session-1",
+                "resourceId": "doc-1",
+                "contextMode": CONTEXT_MODE_ACTIVE_RESOURCE,
+            }
+        )
+
+        self.assertEqual(result["context"]["content"], "Alpha beta")
+
     def test_token_handoff_status_reconnect_states_do_not_require_access_token(self):
         for status in ("revoked", "expired", "reconnect_required"):
             with self.subTest(status=status):
@@ -253,4 +279,3 @@ class GoogleDocsAdapterTokenHandoffTests(AdapterTestCase):
             code=ERROR_CODES["TOKEN_RECONNECT_REQUIRED"],
             http_status=401,
         )
-

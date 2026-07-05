@@ -13,6 +13,8 @@ from .constants import (
     DEFAULT_OPERATION_TIMEOUT_SECONDS,
     DEFAULT_PAGE_SIZE,
     DEFAULT_READ_RETRY_LIMIT,
+    GOOGLE_OAUTH_SCOPE_DOCUMENTS,
+    GOOGLE_OAUTH_SCOPE_DOCUMENTS_READONLY,
     LIST_RESOURCES_REQUIRED_SCOPES,
     MAX_ACTIVE_RESOURCE_BYTES,
     MAX_PAGE_SIZE,
@@ -513,7 +515,7 @@ def _access_token_from_handoff(
         )
 
     granted_scopes = _normalize_granted_scopes(token_response.get("scopes"))
-    missing_scopes = [scope for scope in required_scopes if scope not in granted_scopes]
+    missing_scopes = [scope for scope in required_scopes if not _scope_satisfied(scope, granted_scopes)]
     if missing_scopes:
         raise adapter_error(
             PERMISSION_DENIED,
@@ -545,6 +547,12 @@ def _normalize_granted_scopes(scopes: Any) -> set[str]:
         http_status=401,
         details={"field": "scopes"},
     )
+
+
+def _scope_satisfied(required_scope: str, granted_scopes: set[str]) -> bool:
+    if required_scope in granted_scopes:
+        return True
+    return required_scope == GOOGLE_OAUTH_SCOPE_DOCUMENTS_READONLY and GOOGLE_OAUTH_SCOPE_DOCUMENTS in granted_scopes
 
 
 def _selected_text(text: str, range_: dict[str, Any]) -> dict[str, Any]:
